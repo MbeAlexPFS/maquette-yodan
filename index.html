@@ -3,16 +3,16 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Maquette BSPA — parcours QR + OTP</title>
+  <title>Maquette LAMIFI Business</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Exo+2:wght@400;500;600;700;800&display=swap">
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css?v=29">
 </head>
 <body>
-  <div class="fake-banner" role="note">Maquette — données fictives. Aucun envoi réel (e-mail, OTP, export) : tout est simulé dans le navigateur.</div>
-  <header class="mock-bar" id="mock-bar">
-    <div class="mock-title">BSPA<span>Bilan de santé psychologique</span></div>
+  <header class="mock-bar">
+    <div class="mock-title">Maquette YODAN<span>LAMIFI Business — données fictives</span></div>
+    <select class="partner-select" id="partner-select" aria-label="Partenaire affiché"></select>
     <nav class="role-switch" id="role-switch" aria-label="Choisir un profil"></nav>
     <select class="role-select" id="role-select" aria-label="Choisir un profil"></select>
     <div class="device-switch" role="group" aria-label="Affichage">
@@ -26,6 +26,6 @@
     <aside class="notes" id="notes" aria-label="Notes UX de l'écran"></aside>
   </div>
   <div id="toast" aria-live="polite"></div>
-  <script src="app.js"></script>
+  <script src="app.js?v=29"></script>
 </body>
 </html>
