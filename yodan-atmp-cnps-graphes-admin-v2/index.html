@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Maquette - Graphes admin ATMP CNPS v2</title>
+  <link rel="stylesheet" href="styles.css?v=2.1.2">
+</head>
+<body>
+  <header class="mock-bar">
+    <div class="mock-title">Maquette ATMP CNPS v2<span>graphes de l'administration, données fictives</span></div>
+    <div class="device-switch" role="group" aria-label="Affichage">
+      <button type="button" data-device="pc" class="on" aria-pressed="true">PC</button>
+      <button type="button" data-device="mobile" aria-pressed="false">Mobile</button>
+    </div>
+    <button type="button" class="notes-toggle" id="notes-toggle" aria-pressed="true">Notes UX</button>
+  </header>
+
+  <div class="layout with-notes" id="layout">
+    <main id="stage">
+      <div class="app" id="app">
+        <div class="app-head">
+          <div>
+            <p class="eyebrow">Super admin</p>
+            <h1>Tableau de bord</h1>
+          </div>
+        </div>
+
+        <div class="filters card" role="group" aria-label="Filtres du tableau de bord">
+          <div class="kpi-period">
+            <label for="f-start">Du</label><input type="date" id="f-start" value="2026-01-01">
+            <label for="f-end">au</label><input type="date" id="f-end" value="2026-11-17">
+          </div>
+          <div class="kpi-period">
+            <label for="f-agency">Agence</label>
+            <select id="f-agency"><option value="">Toutes les agences</option></select>
+          </div>
+        </div>
+
+        <!-- Vue d'ensemble -->
+        <h2 class="section-title">Vue d'ensemble</h2>
+        <div class="tiles" id="tiles"></div>
+
+        <div class="kpi-grid">
+          <section class="card kpi-card" id="decision-curve-card">
+            <h3 class="fold-h"><button type="button" class="fold" aria-expanded="true" aria-controls="b-curve">À prendre en charge, évolution</button></h3>
+            <div class="card-body" id="b-curve">
+              <div class="kpi-tools">
+                <div class="kpi-segmented kpi-unit" role="group" aria-label="Unité des colonnes">
+                  <button type="button" data-kpi-unit="count" aria-pressed="true">Nombre</button>
+                  <button type="button" data-kpi-unit="pct" aria-pressed="false">%</button>
+                </div>
+                <div class="kpi-segmented" role="group" aria-label="Granularité">
+                  <button type="button" data-kpi-mode="week">Semaine</button>
+                  <button type="button" data-kpi-mode="month">Mois</button>
+                  <button type="button" data-kpi-mode="year">Année</button>
+                </div>
+              </div>
+              <div class="kpi-nav">
+                <button type="button" class="chev chev-prev" data-kpi-prev aria-label="Période précédente"></button>
+                <strong data-kpi-title></strong>
+                <button type="button" class="chev chev-next" data-kpi-next aria-label="Période suivante"></button>
+              </div>
+              <div class="center"><button type="button" class="btn-ghost kpi-up" data-kpi-up hidden></button></div>
+              <div class="kpi-chart" id="decision-curve"></div>
+              <div class="right"><button type="button" class="btn-ghost">Exporter les données</button></div>
+            </div>
+          </section>
+
+          <div class="kpi-side">
+            <section class="card kpi-card">
+              <h3 class="fold-h"><button type="button" class="fold" aria-expanded="true" aria-controls="b-zone">Évaluations par zone</button></h3>
+              <div class="card-body" id="b-zone"><div class="kpi-chart" id="zone-pie"></div></div>
+            </section>
+            <section class="card kpi-card">
+              <h3 class="fold-h"><button type="button" class="fold" aria-expanded="true" aria-controls="b-decision">Prise en charge</button></h3>
+              <div class="card-body" id="b-decision"><div class="kpi-chart" id="decision-pie"></div></div>
+            </section>
+          </div>
+        </div>
+
+        <!-- Parcours et délais -->
+        <h2 class="section-title">Parcours et délais</h2>
+        <div class="stack">
+          <section class="card kpi-card">
+            <h3 class="fold-h"><button type="button" class="fold" aria-expanded="false" aria-controls="b-funnel">Parcours des demandes</button></h3>
+            <div class="card-body" id="b-funnel" hidden><div class="kpi-chart" id="funnel"></div></div>
+          </section>
+          <section class="card kpi-card">
+            <h3 class="fold-h"><button type="button" class="fold" aria-expanded="false" aria-controls="b-delays">Délais médians</button></h3>
+            <div class="card-body" id="b-delays" hidden><div id="delays"></div></div>
+          </section>
+          <section class="card kpi-card">
+            <h3 class="fold-h"><button type="button" class="fold" aria-expanded="false" aria-controls="b-pending">Dossiers en attente aujourd'hui</button></h3>
+            <div class="card-body" id="b-pending" hidden><div class="kpi-chart" id="pending"></div></div>
+          </section>
+        </div>
+
+        <!-- Accompagnement -->
+        <h2 class="section-title">Accompagnement</h2>
+        <div class="stack">
+          <section class="card kpi-card">
+            <h3 class="fold-h"><button type="button" class="fold" aria-expanded="false" aria-controls="b-pcl">Évolution du score PCL-5</button></h3>
+            <div class="card-body" id="b-pcl" hidden><div class="kpi-chart" id="pcl5"></div></div>
+          </section>
+          <section class="card kpi-card">
+            <h3 class="fold-h"><button type="button" class="fold" aria-expanded="false" aria-controls="b-att">Assiduité aux séances</button></h3>
+            <div class="card-body" id="b-att" hidden><div class="kpi-chart" id="attendance"></div></div>
+          </section>
+        </div>
+
+        <!-- Profil -->
+        <h2 class="section-title">Profil des sinistres</h2>
+        <div class="stack">
+          <section class="card kpi-card">
+            <h3 class="fold-h"><button type="button" class="fold" aria-expanded="false" aria-controls="b-profile">Zone selon le profil</button></h3>
+            <div class="card-body" id="b-profile" hidden>
+              <div class="kpi-tools"><div class="kpi-segmented kpi-scroll" role="group" aria-label="Dimension" id="profile-dims"></div></div>
+              <div class="kpi-chart" id="profile"></div>
+            </div>
+          </section>
+        </div>
+
+        <!-- Agences -->
+        <h2 class="section-title">Agences</h2>
+        <div class="stack">
+          <section class="card kpi-card">
+            <h3 class="fold-h"><button type="button" class="fold" aria-expanded="false" aria-controls="b-agencies">Comparaison des agences</button></h3>
+            <div class="card-body" id="b-agencies" hidden>
+              <div id="agencies"></div>
+              <div class="right"><button type="button" class="btn-ghost">Exporter les données</button></div>
+            </div>
+          </section>
+        </div>
+      </div>
+    </main>
+
+    <aside class="notes" id="notes" aria-label="Notes UX">
+      <h2>Notes UX, graphes admin v2</h2>
+      <p class="muted small">Écran concerné : partials <code>kpi-charts</code> et <code>kpi-cards</code> (super admin, admin CNPS, superviseur). Base : v1 validée.</p>
+      <div id="tests-box"></div>
+
+      <span class="tag">Version 2.1</span>
+      <ul class="after">
+        <li>Aucun texte d'explication dans l'interface : seulement des titres, des chiffres et des graphes. Les définitions sont ci-dessous.</li>
+        <li>Chaque carte se replie et se déplie en cliquant sur son titre. La vue d'ensemble est dépliée, les autres cartes sont repliées.</li>
+        <li>Le détail de chaque barre s'affiche au survol (ou au clavier). « Voir les données » reste disponible pour l'accessibilité.</li>
+        <li>Un seul filtre Période et Agence pour toute la page. L'histogramme garde sa navigation semaine, mois, année.</li>
+      </ul>
+
+      <span class="tag">Définitions</span>
+      <ul>
+        <li><b>Parcours</b> : demandes déposées dans la période, suivies jusqu'à aujourd'hui. Les demandes récentes n'ont pas encore eu le temps d'aller au bout.</li>
+        <li><b>Délais</b> : médiane, donc la moitié des dossiers fait mieux. La décision n'est mesurée que pour les cas orange (vert et rouge sont décidés à l'envoi). Le délai entre la décision et le bon inclut le délai de recours.</li>
+        <li><b>En attente</b> : situation d'aujourd'hui, quelle que soit la période. Attente du bon comptée depuis la fin du délai de recours.</li>
+        <li><b>Score PCL-5</b> : de 0 à 80. On compare le score de départ et celui du dernier test de suivi, pour les personnes qui ont eu au moins un suivi. Amélioration : baisse de 10 points ou plus.</li>
+        <li><b>Assiduité</b> : séances passées seulement.</li>
+        <li><b>Agences</b> : taux de prise en charge égal aux accords divisés par les décisions.</li>
+      </ul>
+
+      <span class="tag">Protection des données</span>
+      <ul class="after">
+        <li>Tout est agrégé. Une ligne de moins de 5 personnes est regroupée dans « Autres ». Une case de 1 à 4 personnes est masquée (hachures).</li>
+        <li>Si une seule case doit être masquée, la plus petite suivante l'est aussi, pour qu'on ne puisse pas la retrouver par soustraction.</li>
+        <li>Agence de moins de 5 demandes : taux et délai masqués.</li>
+      </ul>
+
+      <span class="tag">Questions à valider</span>
+      <ol class="questions">
+        <li>Cartes repliées par défaut hors vue d'ensemble : OK ? Faut-il mémoriser l'état replié ?</li>
+        <li>Filtre Période unique pour toute la page : OK ?</li>
+        <li>Seuil d'amélioration PCL-5 de 10 points : à valider avec les cliniciens Yodan.</li>
+        <li>Paliers d'attente (moins de 48 h, 2 à 7 jours, plus de 7 jours) : OK, ou alignés sur le délai de recours de chaque agence ?</li>
+        <li>Ville : détail par commune pour Abidjan ?</li>
+        <li>Profil (sexe, âge, situation matrimoniale) visible par le superviseur, ou seulement par l'administration ?</li>
+        <li>Évaluations par zone : garder initiales et suivis (comme aujourd'hui), ou initiales seulement ?</li>
+      </ol>
+      <p class="muted small">Côté serveur : zone et score sont chiffrés, les croisements avec la zone se font par lots déchiffrés en mémoire (comme <code>KpiStats::zones()</code>). Seuls les totaux sortent.</p>
+    </aside>
+  </div>
+
+  <script src="app.js?v=2.1.2"></script>
+  <script src="tests.js?v=2.1.2"></script>
+  <script>window.ATMP.boot();</script>
+</body>
+</html>
