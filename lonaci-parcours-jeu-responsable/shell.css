@@ -101,3 +101,8 @@ button, input, select { font: inherit; color: inherit; }
 .scr-dash .mail-mask { color: #57504c; font-variant-numeric: tabular-nums; }
 .scr-dash .consent-title { flex-wrap: wrap; gap: 2px 12px; }
 .scr-dash .consent-title > span:last-child { white-space: nowrap; }
+
+/* Page résultat : bloc Lamifi en pleine largeur au-dessus de WhatsApp et du numéro vert (comme l'application) */
+.scr-result .tile.lamifi { grid-column: 1 / -1; }
+.scr-result .tile.lamifi .tile-ico { background: rgba(60, 33, 14, .1); color: #3c210e; }
+.scr-result .tile.lamifi:hover { border-color: #3c210e; background: #f6ede2; }

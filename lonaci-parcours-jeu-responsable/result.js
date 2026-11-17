@@ -28,7 +28,7 @@
     site.className = 'site zone-' + st.zone;
     $('gauge').style.setProperty('--p', pct);
     $('gauge').setAttribute('aria-label', 'Score : ' + pct + ' %');
-    $('gauge-emoji').textContent = z.emoji;
+    $('gauge-emoji').textContent = zeroRisk ? '✅' : z.emoji;
     $('gauge-pct').textContent = pct + '%';
     $('result-title').textContent = zeroRisk ? NO_RISK.title : z.title;
     $('score').textContent = score;
@@ -47,7 +47,6 @@
     $('saved').hidden = false;
     window.PJR.onFollowup({ callback: call, support });
   });
-  $('r-retake').addEventListener('click', (e) => { e.preventDefault(); window.PJR.go('form'); });
 
   // Nouvel affichage : on réinitialise les cases et le message
   const baseRender = render;
@@ -70,6 +69,8 @@
       '<li>Zone verte : rien n\'est proposé, le test est <b>clos</b>.</li></ul>' +
       '<span class="tag">Changements déjà validés</span>' +
       '<ul><li>Bouton « Ressources d\'accompagnement » retiré → lien « Plus d\'informations sur le jeu responsable » dans le pied de page.</li>' +
+      '<li>Bouton « Refaire le test » retiré : un même téléphone ne peut repasser le test qu\'après <b>30 jours</b>.</li>' +
+      '<li>Liens : <b>application Lamifi</b> (pleine largeur), chaîne WhatsApp, numéro vert 9999, comme dans l\'application (<code>partials/support-links.blade.php</code>).</li>' +
       '<li>Cases à cocher d\'abord, liens ensuite (WhatsApp, 9999).</li>' +
       '<li>« J\'accepte d\'être rappelé(e) » + numéro saisi en début de test : rien n\'est saisi sur cette page.</li>' +
       '<li>Tout tient sur un écran PC (1366 × 768) ; une colonne sur mobile.</li>' +
