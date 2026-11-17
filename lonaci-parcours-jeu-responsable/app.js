@@ -25,16 +25,21 @@ window.PJR = (function () {
   }
   function refreshNotes() { $('#notes').innerHTML = PJR[state.screen].notes(); }
 
-  /** Fin du test (formulaire) → le dossier est créé dans la base commune, puis on affiche le résultat. */
+  const profileOf = (p) => ({ city: p.commune || p.ville, zone: p.commune ? 'Abidjan' : 'Intérieur', age: p.age, sexe: p.sexe, plat: p.plat, canal: p.canal });
+
+  /** Étape 1 validée → test « commencé » (profil seul, sans téléphone). Renvoie l'identifiant du test. */
+  function onTestStarted(profile) {
+    return PJR.dash.start(profileOf(profile)).id;
+  }
+
+  /** Questions envoyées → le même test passe à « terminé », puis on affiche le résultat. */
   function onTestDone(t) {
     const cat = t.score === 0 ? 0 : t.score <= 2 ? 1 : t.score <= 7 ? 2 : 3;
     // Tant que le joueur n'a rien envoyé sur la page résultat, ses choix valent « Sans réponse » (ou « - » si non proposés).
-    const rec = PJR.dash.add({
-      city: t.profile.commune || t.profile.ville, zone: t.profile.commune ? 'Abidjan' : 'Intérieur',
-      age: t.profile.age, sexe: t.profile.sexe, plat: t.profile.plat, canal: t.profile.canal,
+    const rec = PJR.dash.complete(t.id, Object.assign(profileOf(t.profile), {
       score: t.score, cat, answers: t.answers, phone: t.phone, email: t.email,
       callback: cat >= 2 ? 'Sans réponse' : '-', support: cat === 3 ? 'Sans réponse' : '-',
-    });
+    }));
     state.current = { id: rec.id, cat, score: t.score, phone: t.phone };
     setZone(ZONE_OF_CAT[cat]);
     go('result');
@@ -48,7 +53,7 @@ window.PJR = (function () {
     if (c.cat >= 2) patch.callback = f.callback ? 'Oui' : 'Non';
     if (c.cat === 3) patch.support = f.support ? 'Oui' : 'Non';
     PJR.dash.update(c.id, patch);
-    toast('Maquette : dossier ' + c.id + ' mis à jour (appel : ' + (patch.callback || '-') + '). Il est visible dans le tableau de bord, onglet ③.');
+    toast('Maquette : dossier ' + c.id + ' mis à jour (appel : ' + (patch.callback || '-') + ', accompagnement : ' + (patch.support || '-') + '). Il est visible dans le tableau de bord, onglet ③.');
   }
 
   function setZone(z) {
@@ -91,5 +96,5 @@ window.PJR = (function () {
     go('form');
   }
 
-  return { state, go, toast, onTestDone, onFollowup, boot, refreshNotes };
+  return { state, go, toast, onTestStarted, onTestDone, onFollowup, boot, refreshNotes };
 })();

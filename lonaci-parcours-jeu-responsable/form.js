@@ -25,7 +25,7 @@
   const $ = (s) => document.querySelector(s);
   const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const emptyForm = () => ({ phone: '', email: '', ville: '', autreVille: '', commune: '', age: '', sexe: '', plat: '', canal: '', consent: false });
-  const S = { step: 'info', form: emptyForm(), errors: {}, q: 0, answers: [] };
+  const S = { step: 'info', form: emptyForm(), errors: {}, q: 0, answers: [], testId: null };
 
   function render() {
     $('#f-page').innerHTML = header(S.step === 'info' ? 1 : 2) + (S.step === 'info' ? infoForm() : questionScreen());
@@ -105,17 +105,20 @@
     readForm();
     S.errors = validate();
     if (Object.keys(S.errors).length) { render(); const first = document.querySelector('.scr-form .bad'); if (first) first.focus(); return; }
+    // Test « commencé » : enregistré maintenant (profil seul) ; même dossier si on revient modifier ses informations
+    S.testId = window.PJR.onTestStarted(profileOf(S.form));
     S.step = 'questions'; S.q = 0; S.answers = [];
     render(); $('#frame').scrollTop = 0;
   }
 
+  const profileOf = (f) => ({ ville: f.ville === OTHER ? f.autreVille : f.ville, commune: f.commune || null, age: +f.age, sexe: f.sexe === 'Homme' ? 'H' : 'F', plat: f.plat, canal: f.canal });
+
   function submit() {
     const f = S.form;
     const score = S.answers.reduce((s, x) => s + x, 0);
-    const profile = { ville: f.ville === OTHER ? f.autreVille : f.ville, commune: f.commune || null, age: +f.age, sexe: f.sexe === 'Homme' ? 'H' : 'F', plat: f.plat, canal: f.canal };
-    const done = { profile, phone: f.phone, email: f.email || null, answers: S.answers.slice(), score };
+    const done = { id: S.testId, profile: profileOf(f), phone: f.phone, email: f.email || null, answers: S.answers.slice(), score };
     // Le joueur qui refait le test repart d'un formulaire vide (pas de pré-remplissage : téléphones souvent partagés)
-    S.step = 'info'; S.form = emptyForm(); S.errors = {}; S.q = 0; S.answers = [];
+    S.step = 'info'; S.form = emptyForm(); S.errors = {}; S.q = 0; S.answers = []; S.testId = null;
     window.PJR.onTestDone(done);
   }
 

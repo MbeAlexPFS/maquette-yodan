@@ -33,7 +33,7 @@
     $('result-title').textContent = zeroRisk ? NO_RISK.title : z.title;
     $('score').textContent = score;
     $('result-msg').textContent = zeroRisk ? NO_RISK.msg : z.msg;
-    $('r-phone').textContent = cur && cur.phone ? cur.phone : '07 00 00 00 00';
+    $('r-phone').textContent = $('r-phone2').textContent = cur && cur.phone ? cur.phone : '07 00 00 00 00';
     // Cases à cocher : zones orange et rouge ; accompagnement : rouge uniquement
     $('follow').hidden = st.zone === 'green';
     $('support-row').hidden = st.zone !== 'red';
@@ -43,7 +43,7 @@
     e.preventDefault();
     const call = $('cb-call').checked;
     const support = $('cb-support').checked && window.PJR.state.zone === 'red';
-    $('saved').textContent = 'Merci, votre choix a bien été enregistré.' + (call || support ? ' Nous vous contacterons dans les meilleurs délais.' : '');
+    $('saved').textContent = 'Merci, votre choix a bien été enregistré.' + (call || support ? ' Nous vous appellerons dans les meilleurs délais au ' + $('r-phone').textContent + '.' : '');
     $('saved').hidden = false;
     window.PJR.onFollowup({ callback: call, support });
   });
@@ -65,7 +65,8 @@
       '<p class="muted small">Basée sur <code>test-result.blade.php</code>. ' + (cur ? 'Affiche <b>votre test</b> (dossier ' + cur.id + ').' : 'Aperçu d\'une zone choisie dans la barre (sans test lié).') + '</p>' +
       '<span class="tag">Lien avec le tableau de bord</span>' +
       '<ul><li>Tant que le joueur n\'a pas cliqué sur « Enregistrer mon choix », ses choix valent <b>« Sans réponse »</b>.</li>' +
-      '<li>Case cochée → <b>Oui</b> ; envoyé sans cocher → <b>Non</b>. Seuls les « Oui » arrivent dans la liste <b>À appeler</b> de YODAN.</li>' +
+      '<li>Case cochée → <b>Oui</b> ; envoyé sans cocher → <b>Non</b>. Une case « Oui » suffit (appel <b>ou</b> accompagnement) pour arriver dans la liste <b>À appeler</b> de YODAN.</li>' +
+      '<li>L\'accompagnement passe par un <b>appel</b> : le texte de la case le dit, avec le numéro saisi, et le message de confirmation le répète.</li>' +
       '<li>Zone verte : rien n\'est proposé, le test est <b>clos</b>.</li></ul>' +
       '<span class="tag">Changements déjà validés</span>' +
       '<ul><li>Bouton « Ressources d\'accompagnement » retiré → lien « Plus d\'informations sur le jeu responsable » dans le pied de page.</li>' +

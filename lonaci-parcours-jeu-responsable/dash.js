@@ -56,8 +56,10 @@
     ['Être critiqué pour ses habitudes de jeu', .8], ['Difficultés financières (soi, foyer)', .9],
     ['Se sentir coupable de sa façon de jouer', 1.2],
   ];
-  const AGE_GROUPS = [['18–24', 18, 24], ['25–34', 25, 34], ['35–44', 35, 44], ['45–54', 45, 54], ['55 +', 55, 99]];
-  const ageGroup = (a) => AGE_GROUPS.find((g) => a >= g[1] && a <= g[2])[0];
+  const AGE_GROUPS = [['12–17', 12, 17], ['18–24', 18, 24], ['25–34', 25, 34], ['35–44', 35, 44], ['45–54', 45, 54], ['55 +', 55, 99]];
+  const ageGroup = (a) => (AGE_GROUPS.find((g) => a >= g[1] && a <= g[2]) || AGE_GROUPS[AGE_GROUPS.length - 1])[0];
+  // Tranches affichées : seulement celles qui contiennent au moins un test (12–17 n'apparaît que si un mineur a commencé un test)
+  const ageGroups = () => AGE_GROUPS.filter((g) => records.some((r) => ageGroup(r.age) === g[0]));
   const expo = (mean) => -Math.log(1 - R()) * mean;
   const d2 = () => String(Math.floor(R() * 100)).padStart(2, '0');
 
@@ -95,9 +97,14 @@
        - demande d'appel proposée aux zones orange et rouge, accompagnement à la zone rouge seulement ;
        - si proposé : Oui (case cochée), Non (formulaire envoyé sans cocher), Sans réponse (page quittée sans envoyer) ;
        - '-' = non proposé pour la zone du test. */
+    /* Les deux cases sont dans le MÊME formulaire : s'il n'est pas envoyé, les deux valent « Sans réponse » ;
+       s'il est envoyé, chaque case vaut Oui ou Non (jamais « Sans réponse »). */
     let callback = '-', support = '-';
-    if (cat >= 2) callback = pick([['Oui', 45], ['Non', 20], ['Sans réponse', 35]]);
-    if (cat === 3) support = pick([['Oui', 32], ['Non', 25], ['Sans réponse', 43]]);
+    if (cat >= 2) {
+      const sent = R() < (cat === 3 ? .6 : .65);
+      callback = !sent ? 'Sans réponse' : R() < .7 ? 'Oui' : 'Non';
+      if (cat === 3) support = !sent ? 'Sans réponse' : R() < (callback === 'Oui' ? .55 : .2) ? 'Oui' : 'Non';
+    }
 
     /* Statut du dossier :
        clos  = zone verte, aucune action ;
@@ -106,13 +113,13 @@
        none  = à risque sans demande d'appel (Non / Sans réponse) : pas d'appel sortant. */
     let status = 'clos', pecAt = null;
     if (cat >= 2) {
-      if (callback === 'Oui') {
+      if (callback === 'Oui' || support === 'Oui') {
         let p = daysAgo < 2 ? .2 : daysAgo < 7 ? .7 : daysAgo < 14 ? .93 : .995;
         if (daysAgo < 14 && zone === 'Intérieur') p *= .9;
         if (daysAgo < 14 && age < 25) p *= .93;
         status = R() < p ? 'done' : 'wait';
       } else {
-        status = R() < .08 ? 'done' : 'none'; // a appelé le 9999 de lui-même
+        status = R() < .08 ? 'done' : 'none'; // a appelé le 9999 de lui-même, retrouvé par recherche
       }
       if (status === 'done') pecAt = new Date(+date + Math.min(daysAgo, expo(2) + .1) * DAY);
     }
@@ -193,6 +200,9 @@
   const CAT_COLORS = CATS.map((c) => c.c);
   const CAT_LABELS = CATS.map((c) => c.l);
   const atRisk = (r) => r.cat >= 2;
+  /** Demande de contact = au moins une case cochée (appel ou accompagnement). C'est elle qui met le dossier « À appeler ». */
+  const asked = (r) => r.callback === 'Oui' || r.support === 'Oui';
+  const pecLabel = (r) => 'Pris en charge le ' + shortDate(r.pecAt);
 
   function render() {
     const st = started();
@@ -214,7 +224,7 @@
   }
 
   function renderKpis(st, rs, risk) {
-    const oui = risk.filter((r) => r.callback === 'Oui');
+    const oui = risk.filter(asked);
     const sr = risk.filter((r) => r.callback === 'Sans réponse').length;
     const done = risk.filter((r) => r.status === 'done').length;
     const ouiDone = oui.filter((r) => r.status === 'done').length;
@@ -225,18 +235,18 @@
       k('Tests terminés', nTxt(rs.length), '≈ ' + (rs.length / days).toFixed(1).replace('.', ',') + ' par jour') +
       k('Taux de complétion', pTxt(rate(rs.length, st.length)), nTxt(st.length - rs.length) + ' tests commencés non terminés') +
       k('Joueurs à risque', nTxt(risk.length), pTxt(rate(risk.length, rs.length)) + ' des tests (modéré + excessif)') +
-      k('Demandes d\'appel', nTxt(oui.length), 'acceptation ' + pTxt(rate(oui.length, risk.length)) + ' · ' + nTxt(sr) + ' sans réponse') +
-      k('Pris en charge', nTxt(done), pTxt(rate(ouiDone, oui.length)) + ' des demandes d\'appel') +
-      k('À appeler', nTxt(wait), 'demandes d\'appel en attente', wait ? 'alert' : '');
+      k('Demandes de contact', nTxt(oui.length), pTxt(rate(oui.length, risk.length)) + ' des joueurs à risque · ' + nTxt(sr) + ' sans réponse') +
+      k('Pris en charge', nTxt(done), pTxt(rate(ouiDone, oui.length)) + ' des demandes de contact') +
+      k('À appeler', nTxt(wait), 'demandes de contact en attente', wait ? 'alert' : '');
   }
 
   function renderFunnel(st, rs, risk) {
-    const oui = risk.filter((r) => r.callback === 'Oui');
+    const oui = risk.filter(asked);
     const steps = [
       ['Tests commencés', 'étape « Informations » validée', st.length],
       ['Tests terminés', 'questions envoyées', rs.length],
       ['Joueurs à risque', 'modéré + excessif', risk.length],
-      ['Demandent un appel', 'demande d\'appel = Oui', oui.length],
+      ['Demandent un contact', 'appel ou accompagnement = Oui', oui.length],
       ['Pris en charge', 'parmi ceux qui ont demandé', oui.filter((r) => r.status === 'done').length],
     ];
     const max = st.length || 1;
@@ -292,19 +302,21 @@
     $('#histo').innerHTML = svg + (isL() ? '<p class="small muted" style="margin:4px 0 0">Scores 20 à 27 regroupés ; barres hachurées = moins de 5 tests (hauteur plafonnée au seuil).</p>' : '');
   }
 
+  const PEC_LABELS = ['Pris en charge', 'En attente d\'appel', 'Sans demande · Non', 'Sans demande · Sans réponse'];
+  const pecCounts = (risk) => [
+    risk.filter((r) => r.status === 'done').length,
+    risk.filter((r) => r.status === 'wait').length,
+    risk.filter((r) => r.status === 'none' && r.callback === 'Non').length,
+    risk.filter((r) => r.status === 'none' && r.callback === 'Sans réponse').length,
+  ];
   function renderPec(rs, risk) {
     const clos = rs.filter((r) => r.status === 'clos').length;
-    const labels = ['Pris en charge', 'En attente d\'appel', 'Non', 'Sans réponse'];
+    const labels = PEC_LABELS;
     const cols = ['#2a78d6', '#eda100', '#8a837d', '#d6d1cc'];
-    const counts = [
-      risk.filter((r) => r.status === 'done').length,
-      risk.filter((r) => r.status === 'wait').length,
-      risk.filter((r) => r.status === 'none' && r.callback === 'Non').length,
-      risk.filter((r) => r.status === 'none' && r.callback === 'Sans réponse').length,
-    ];
+    const counts = pecCounts(risk);
     const mk = small(sum(counts)) ? counts.map(() => 1) : suppress(counts);
     const total = sum(counts) || 1;
-    const oui = risk.filter((r) => r.callback === 'Oui');
+    const oui = risk.filter(asked);
     const real = rate(oui.filter((r) => r.status === 'done').length, oui.length);
     const Rr = 58, C = 2 * Math.PI * Rr;
     let off = 0, arcs = '';
@@ -321,8 +333,8 @@
     $('#pec').innerHTML =
       '<div class="closed"><span class="lock" aria-hidden="true">✓</span><div><b>' + nTxt(clos) + '</b> tests <b style="font-size:inherit;font-family:inherit">clos</b> — zone verte (sans risque, faible risque), aucune action. ' + pTxt(rate(clos, rs.length)) + ' des tests terminés.</div></div>' +
       '<p class="sec-title">Dossiers à risque (' + nTxt(risk.length) + ') — nécessitent un suivi</p>' +
-      '<div class="pec">' + svg + '<div class="pec-figs">' + fig(0) + fig(1) + fig(2) + fig(3) + '</div></div>' +
-      '<p class="small muted" style="margin:10px 0 0">« Non » et « Sans réponse » : pas d\'appel sortant. Un joueur peut toujours appeler le 9999 ; il passe alors en « Pris en charge ».</p>';
+      '<div class="pec">' + svg + '<div class="pec-figs">' + labels.map((_, i) => fig(i)).join('') + '</div></div>' +
+      '<p class="small muted" style="margin:10px 0 0">Sans demande (« Non » ou « Sans réponse ») : pas d\'appel sortant. Si la personne appelle elle-même le 9999, l\'écoutant retrouve son dossier par recherche et le prend en charge.</p>';
   }
 
   function renderWeekly(rs) {
@@ -374,7 +386,7 @@
   function renderHeat(rs) {
     let html = '<div class="heat" style="grid-template-columns:70px repeat(4,minmax(0,1fr)) 56px"><div></div>' +
       CATS.map((c) => '<div class="h">' + c.l + '</div>').join('') + '<div class="h">Tests</div>';
-    AGE_GROUPS.forEach((g) => {
+    ageGroups().forEach((g) => {
       const row = rs.filter((r) => ageGroup(r.age) === g[0]);
       const counts = CATS.map((_, j) => row.filter((r) => r.cat === j).length);
       const tot = row.length;
@@ -426,10 +438,12 @@
         '<span class="cell">' + bar(r == null ? 0 : r * 100, 'var(--r3)', r == null, p.name + ' : ' + pPlain(r) + ' à risque') + '<b>' + pTxt(r) + '</b></span></div>';
     }).join('') + '</div>';
   }
+  // Villes de la liste + villes saisies via « Autre ville… »
+  const villeNames = () => [...new Set(VILLES.map((v) => v[0]).concat(records.filter((r) => r.zone === 'Intérieur').map((r) => r.city)))];
   function renderCities(rs) {
     $('#cities').innerHTML = '<div class="plats">' +
       riskList(rs, COMMUNE_NAMES, (r) => r.city, 'Abidjan — commune') +
-      riskList(rs, VILLES.map((v) => v[0]), (r) => r.city, 'Intérieur — ville') + '</div>';
+      riskList(rs, villeNames(), (r) => r.city, 'Intérieur — ville') + '</div>';
   }
   function renderPlats(rs) {
     const names = PLATS.map((p) => p[0]);
@@ -465,18 +479,18 @@
     $('#completion').innerHTML =
       '<div class="consent-title"><span style="color:var(--text);font-weight:700;font-size:.84rem">Ensemble <span>· ' + nTxt(st.length) + ' tests commencés</span></span><span>complétion <b>' + pTxt(overall) + '</b></span></div>' +
       '<p class="sec-title">Par canal</p>' + rateBars(CANAUX.map((c) => [c[0], c[0]]), st, (r) => r.canal, done, overall, '#1baf7a') +
-      '<p class="sec-title">Par tranche d\'âge</p>' + rateBars(AGE_GROUPS.map((g) => [g[0], g[0]]), st, (r) => ageGroup(r.age), done, overall, '#1baf7a');
+      '<p class="sec-title">Par tranche d\'âge</p>' + rateBars(ageGroups().map((g) => [g[0], g[0]]), st, (r) => ageGroup(r.age), done, overall, '#1baf7a');
   }
 
   function renderEquity(risk) {
-    const oui = risk.filter((r) => r.callback === 'Oui');
+    const oui = risk.filter(asked);
     const isDone = (r) => r.status === 'done';
     const overall = oui.length ? oui.filter(isDone).length / oui.length : null;
     const g = (title, groups, fn) => '<div><h3>' + title + '</h3>' + rateBars(groups, oui, fn, isDone, overall, '#2a78d6') + '</div>';
     $('#equity').innerHTML = '<div class="equity">' +
       g('Zone', [['Abidjan', 'Abidjan'], ['Intérieur', 'Intérieur']], (r) => r.zone) +
       g('Sexe', SEXES, (r) => r.sexe) +
-      g('Tranche d\'âge', AGE_GROUPS.map((a) => [a[0], a[0]]), (r) => ageGroup(r.age)) +
+      g('Tranche d\'âge', ageGroups().map((a) => [a[0], a[0]]), (r) => ageGroup(r.age)) +
       g('Canal', CANAUX.map((c) => [c[0], c[0]]), (r) => r.canal) + '</div>';
   }
 
@@ -497,7 +511,7 @@
     const d = normPhone(t);
     return d.length >= 8 ? { type: 'phone', value: d } : { error: 'Numéro incomplet : saisissez le numéro entier (8 chiffres ou plus).' };
   }
-  // Exemple pour les notes : un dossier « Sans réponse » avec e-mail (montre la prise en charge sur appel entrant)
+  // Exemple pour les notes : un dossier « Sans réponse » avec e-mail (montre la prise en charge quand la personne appelle le 9999)
   const exampleContact = () => records.find((r) => r.completed && r.cat >= 2 && r.status === 'none' && r.email && r.ageDays > 20);
   const maskEmail = (e) => { const [u, dom] = String(e).split('@'); return u.charAt(0) + '•••@' + dom; };
   const matches = (r, s) => (s.type === 'phone' ? normPhone(r.phone) === s.value : normEmail(r.email) === s.value);
@@ -526,20 +540,21 @@
     const statusCell = (r) => (r.status === 'wait'
       ? '<button type="button" class="btn-act" data-act="call" data-id="' + r.id + '">Appeler</button>'
       : r.status === 'done'
-        ? '<span class="stat-done">Pris en charge le ' + shortDate(r.pecAt) + '</span>'
+        ? '<span class="stat-done">' + pecLabel(r) + '</span>'
         : s // trouvé par recherche = le joueur appelle lui-même (9999) : on peut le prendre en charge
-          ? '<button type="button" class="btn-act sec" data-act="take" data-id="' + r.id + '" data-tip="' + esc('Appel entrant : la personne a contacté le 9999 (demande d\'appel : ' + r.callback + ')') + '">Prendre en charge</button>'
+          ? '<button type="button" class="btn-act sec" data-act="take" data-id="' + r.id + '" data-tip="' + esc('La personne a appelé le 9999 (demande d\'appel : ' + r.callback + ')') + '">Prendre en charge</button>'
           : '<span class="btn-act none">' + r.callback + ' · pas d\'appel</span>');
     const td = (l, html) => '<td data-l="' + l + '"><span>' + html + '</span></td>';
     $('#qtable tbody').innerHTML = shown.map(({ r, p }) => {
       // Contact proposé pour les dossiers à appeler, ou pour un dossier retrouvé par recherche
-      const eligible = r.status === 'wait' || !!s;
+      // Contact accessible : dossier à appeler, dossier pris en charge (suivi), ou retrouvé par recherche
+      const eligible = r.status === 'wait' || r.status === 'done' || !!s;
       const shownC = eligible && revealed.has(r.id);
-      const phone = !eligible ? '<span class="muted">—</span>'
+      const phone = !eligible ? '<span class="muted" data-tip="Aucune demande de contact : pas d\'appel sortant">Pas de demande</span>'
         : shownC ? '<span class="phone-num">' + esc(r.phone) + '</span>'
           : '<button type="button" class="btn-phone" data-act="phone" data-id="' + r.id + '">Afficher le contact</button>';
       // E-mail : « aucun » s'il n'a pas été saisi ; masqué tant que le contact n'est pas affiché (affichage journalisé)
-      const mail = !r.email ? '<span class="muted">Aucun</span>'
+      const mail = !eligible ? '<span class="muted">—</span>' : !r.email ? '<span class="muted">Aucun</span>'
         : shownC ? '<span class="contact-mail">' + esc(r.email) + '</span>'
           : '<span class="mail-mask" data-tip="Masqué : « Afficher le contact » l\'affiche en entier">' + esc(maskEmail(r.email)) + '</span>';
       const dt = r.date.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' }) + ' ' + r.date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
@@ -598,21 +613,24 @@
         '<li>La liste des dossiers n\'existe pas pour ce profil (le cadre hachuré n\'est qu\'un repère de maquette).</li>' +
         '<li>Essayez : <i>Période = 30 jours</i> + <i>Sexe = Femmes</i> + <i>Plateforme = BETWINNER</i> pour voir le masquage.</li></ul>'
       : '<ul><li>Mêmes blocs que LONACI, <b>sans masquage</b> (besoin clinique), plus la <b>liste des dossiers à risque</b> en bas de page.</li>' +
-        '<li><b>À appeler</b> = demande d\'appel « Oui », pas encore prise en charge. Tri : ① jeu excessif, ② risque modéré ; puis du plus ancien au plus récent.</li>' +
-        '<li>« Non » et « Sans réponse » : visibles avec le filtre <i>Tous les dossiers à risque</i>, jamais appelés.</li>' +
+        '<li><b>À appeler</b> = demande de contact (appel <b>ou</b> accompagnement = « Oui »), pas encore prise en charge. Tri : ① jeu excessif, ② risque modéré ; puis du plus ancien au plus récent. « Appeler » simule ici un appel abouti.</li>' +
+        '<li>Sans demande (« Non » ou « Sans réponse ») : visibles avec le filtre <i>Tous les dossiers à risque</i>, jamais appelés, contact non affiché (« Pas de demande »).</li>' +
+        '<li>Un dossier <b>pris en charge</b> affiche seulement sa date (pas de motif : c\'est un appel, qu\'il soit passé ou reçu). Son contact reste accessible pour le suivi.</li>' +
+        '<li><b>Accompagnement « Oui »</b> sans demande d\'appel : le dossier est aussi « À appeler » ; la page résultat prévient la personne qu\'elle sera appelée.</li>' +
         '<li>Colonne Accomp. : « — » pour le risque modéré (accompagnement non proposé à cette zone).</li>' +
-        '<li>Le contact n\'est proposé que pour les dossiers à appeler ou retrouvés par recherche. La colonne E-mail indique « Aucun » ou une adresse masquée (<code>j•••@exemple.test</code>) ; « Afficher le contact » affiche le téléphone et l\'e-mail en entier et <b>journalise l\'accès</b>.</li>' +
+        '<li>Le contact n\'est proposé que pour les dossiers à appeler, pris en charge ou retrouvés par recherche. La colonne E-mail indique « Aucun » ou une adresse masquée (<code>j•••@exemple.test</code>) ; « Afficher le contact » affiche le téléphone et l\'e-mail en entier et <b>journalise l\'accès</b>.</li>' +
         '<li>Les blocs du tableau de bord sont <b>repliables</b> : seuls les deux premiers et la liste des dossiers sont ouverts au départ, pour alléger l\'écran.</li>' +
         '<li>Un dossier pris en charge affiche sa <b>date de prise en charge</b> (pas de calcul de délai).</li></ul>' +
         '<span class="tag">Recherche et pagination</span>' +
         '<ul><li><b>Recherche par téléphone ou e-mail</b> : usage typique, une personne appelle le 9999 et l\'écoutant retrouve son dossier. La recherche porte sur <b>tous</b> les dossiers à risque, quels que soient la période et les filtres.</li>' +
         '<li><b>Correspondance exacte</b> uniquement : numéro complet (espaces, indicatif +225 ignorés) ou e-mail complet. Un morceau de numéro ne renvoie rien, pour qu\'on ne puisse pas parcourir les contacts.</li>' +
-        '<li>Un dossier retrouvé « Non » ou « Sans réponse » peut être <b>pris en charge</b> (appel entrant) ; la date est enregistrée.</li>' +
+        '<li>Un dossier retrouvé « Non » ou « Sans réponse » peut être <b>pris en charge</b> quand la personne appelle le 9999 ; la date est enregistrée.</li>' +
         '<li>Chaque recherche est <b>journalisée</b> (utilisateur, date, type, nombre de résultats), <b>sans</b> le numéro ni l\'e-mail saisi.</li>' +
         '<li><b>Pagination</b> : 10, 25 ou 50 dossiers par page ; tout changement de filtre revient à la page 1.</li>' +
         (exampleContact() ? '<li>Essayez : <code>' + esc(exampleContact().phone) + '</code>' + (exampleContact().email ? ' ou <code>' + esc(exampleContact().email) + '</code>' : '') + ' (données fictives).</li>' : '') + '</ul>';
     return '<h2>③ Tableau de bord</h2>' +
-      (myRec() ? '<p class="small"><b>Votre test</b> (dossier ' + myRec().id + ', ' + CATS[myRec().cat].l + ') est compté dans les chiffres' + (myRec().cat >= 2 ? ' ; côté YODAN, filtre <i>Tous les dossiers à risque</i> pour le retrouver' + (myRec().status === 'wait' ? ' (il est aussi dans « À appeler »)' : '') : '') + '.</p>' : '') +
+      (myRec() && !myRec().completed ? '<p class="small"><b>Votre test</b> (dossier ' + myRec().id + ') est <b>commencé, non terminé</b> : il compte dans le taux de complétion, sans score ni téléphone, et n\'apparaît dans aucune liste.</p>' : '') +
+      (myRec() && myRec().completed ? '<p class="small"><b>Votre test</b> (dossier ' + myRec().id + ', ' + CATS[myRec().cat].l + ') est compté dans les chiffres' + (myRec().cat >= 2 ? ' ; côté YODAN, filtre <i>Tous les dossiers à risque</i> pour le retrouver' + (myRec().status === 'wait' ? ' (il est aussi dans « À appeler »)' : '') : '') + '.</p>' : '') +
       '<p>Un seul écran pour LONACI et YODAN. Les données sont saisies une fois ; ce qui change selon le profil, c\'est <b>ce qui est caché</b>.</p>' +
       '<span class="tag">Profil affiché : ' + (isL() ? 'LONACI (pilotage)' : 'YODAN (clinique)') + '</span>' + roleNotes +
       '<span class="tag">Changements v2 (retours du 17/11)</span>' +
@@ -622,6 +640,7 @@
       '<li>Zone verte : statut <b>« Clos »</b>, compté à part ; les dossiers à risque sont seuls suivis.</li>' +
       '<li><b>« Sans réponse »</b> = indicateur de gestion, pas de rappel (le joueur peut appeler le 9999).</li>' +
       '<li>Réponses alignées sur l\'application : <b>Oui / Non / Sans réponse</b> pour les joueurs à qui le choix est proposé (appel : modéré + excessif ; accompagnement : excessif). Acceptation = Oui ÷ (Oui + Non + Sans réponse).</li>' +
+      '<li>Les deux cases sont dans le <b>même formulaire</b> : « Sans réponse » vaut pour les deux à la fois ; une fois le formulaire envoyé, chaque case vaut Oui ou Non.</li>' +
       '<li>Plus de délai : seule la <b>date de prise en charge</b> est enregistrée.</li>' +
       '<li>Masquage LONACI : <b>0 à 4</b> (zéros compris).</li>' +
       '<li>Mise à jour et <b>export en temps réel</b> : le CSV reprend les chiffres à l\'instant du clic, avec les filtres en cours et le même masquage que l\'écran. Export YODAN de la liste : <b>jamais de téléphone</b>. Chaque export est journalisé.</li>' +
@@ -657,7 +676,7 @@
     const st = started();
     const rs = st.filter((r) => r.completed);
     const risk = rs.filter(atRisk);
-    const oui = risk.filter((r) => r.callback === 'Oui');
+    const oui = risk.filter(asked);
     const rows = [];
     const add = (bloc, ind, grp, val) => rows.push([bloc, ind, grp, val]);
     const cats = (bloc, grp, pop) => {
@@ -687,25 +706,24 @@
       add('Consentement', l, 'Taux d\'acceptation = Oui ÷ (Oui + Non + Sans réponse)', pPlain(rate(counts[0], sum(counts))));
     });
     add('Suivi', 'Tests clos (zone verte)', 'Ensemble', nPlain(rs.filter((r) => r.status === 'clos').length));
-    const sc = [risk.filter((r) => r.status === 'done').length, risk.filter((r) => r.status === 'wait').length,
-      risk.filter((r) => r.status === 'none' && r.callback === 'Non').length, risk.filter((r) => r.status === 'none' && r.callback === 'Sans réponse').length];
+    const sc = pecCounts(risk);
     const smk = suppress(sc);
-    ['Pris en charge', 'En attente d\'appel', 'Non', 'Sans réponse'].forEach((l, i) => add('Suivi', 'Dossiers à risque', l, mkPlain(sc[i], smk[i])));
-    add('Suivi', 'Demandes d\'appel prises en charge', 'Ensemble', pPlain(rate(oui.filter((r) => r.status === 'done').length, oui.length)));
+    PEC_LABELS.forEach((l, i) => add('Suivi', 'Dossiers à risque', l, mkPlain(sc[i], smk[i])));
+    add('Suivi', 'Demandes de contact prises en charge', 'Ensemble', pPlain(rate(oui.filter((r) => r.status === 'done').length, oui.length)));
     SEXES.forEach((s) => cats('Profil', 'Sexe ' + s[1], rs.filter((r) => r.sexe === s[0])));
     ['Abidjan', 'Intérieur'].forEach((z) => cats('Profil', 'Zone ' + z, rs.filter((r) => r.zone === z)));
-    AGE_GROUPS.forEach((g) => cats('Profil', 'Âge ' + g[0], rs.filter((r) => ageGroup(r.age) === g[0])));
+    ageGroups().forEach((g) => cats('Profil', 'Âge ' + g[0], rs.filter((r) => ageGroup(r.age) === g[0])));
     CANAUX.forEach((c) => cats('Profil', 'Canal ' + c[0], rs.filter((r) => r.canal === c[0])));
     groups('Communes d\'Abidjan', COMMUNE_NAMES, (r) => r.city, rs);
-    groups('Villes de l\'intérieur', VILLES.map((v) => v[0]), (r) => r.city, rs);
+    groups('Villes de l\'intérieur', villeNames(), (r) => r.city, rs);
     groups('Plateformes', PLATS.map((p) => p[0]), (r) => r.plat, rs);
     ITEMS.forEach((it, j) => add('Réponses ICJE', '% « La plupart du temps » ou « Presque toujours »', it[0], pPlain(rate(rs.filter((r) => r.answers[j] >= 2).length, rs.length))));
     CANAUX.forEach((c) => { const p = st.filter((r) => r.canal === c[0]); add('Complétion', 'Taux de complétion', 'Canal ' + c[0], pPlain(rate(p.filter((r) => r.completed).length, p.length))); });
-    AGE_GROUPS.forEach((g) => { const p = st.filter((r) => ageGroup(r.age) === g[0]); add('Complétion', 'Taux de complétion', 'Âge ' + g[0], pPlain(rate(p.filter((r) => r.completed).length, p.length))); });
+    ageGroups().forEach((g) => { const p = st.filter((r) => ageGroup(r.age) === g[0]); add('Complétion', 'Taux de complétion', 'Âge ' + g[0], pPlain(rate(p.filter((r) => r.completed).length, p.length))); });
     const eq = (label, fn, val) => { const p = oui.filter((r) => fn(r) === val); add('Équité', 'Demandes prises en charge', label, pPlain(rate(p.filter((r) => r.status === 'done').length, p.length))); };
     ['Abidjan', 'Intérieur'].forEach((z) => eq('Zone ' + z, (r) => r.zone, z));
     SEXES.forEach((s) => eq('Sexe ' + s[1], (r) => r.sexe, s[0]));
-    AGE_GROUPS.forEach((g) => eq('Âge ' + g[0], (r) => ageGroup(r.age), g[0]));
+    ageGroups().forEach((g) => eq('Âge ' + g[0], (r) => ageGroup(r.age), g[0]));
     CANAUX.forEach((c) => eq('Canal ' + c[0], (r) => r.canal, c[0]));
 
     download('indicateurs', [['Bloc', 'Indicateur', 'Groupe', 'Valeur']].concat(rows));
@@ -715,7 +733,7 @@
     if (isL()) return; // n'existe pas côté LONACI
     const risk = started().filter((r) => r.completed && atRisk(r));
     const head = ['Dossier', 'Date du test', 'Commune / ville', 'Zone', 'Âge', 'Sexe', 'Plateforme', 'Score', 'Catégorie', 'Canal', 'Demande d\'appel', 'Accompagnement', 'Statut', 'Pris en charge le'];
-    const label = { done: 'Pris en charge', wait: 'En attente d\'appel', none: 'Pas d\'appel' };
+    const label = { done: 'Pris en charge', wait: 'En attente d\'appel', none: 'Sans demande' };
     const rows = risk.map((r) => [r.id, r.date.toLocaleString('fr-FR'), r.city, r.zone, r.age, r.sexe, r.plat, r.score, CATS[r.cat].l, r.canal,
       r.callback, r.support === '-' ? '-' : r.support, label[r.status], r.pecAt ? shortDate(r.pecAt) : '']);
     download('dossiers-a-risque', [head].concat(rows)); // jamais de colonne téléphone
@@ -778,9 +796,13 @@
       const rec = records.find((r) => r.id === id);
       rec.status = 'done'; rec.pecAt = new Date(TODAY);
       render(); window.PJR.refreshNotes();
-      toast('Dossier ' + id + ' pris en charge (appel entrant), date enregistrée.');
+      toast('Dossier ' + id + ' pris en charge, date enregistrée.');
     } else {
-      toast('Maquette : ouvre la fiche d\'appel du dossier ' + id + ' (joint → « Pris en charge », date enregistrée · injoignable → reste « À appeler »).');
+      // Maquette : on simule un appel abouti (en vrai, la fiche d'appel propose « joint » ou « injoignable »)
+      const rec = records.find((r) => r.id === id);
+      rec.status = 'done'; rec.pecAt = new Date(TODAY);
+      render(); window.PJR.refreshNotes();
+      toast('Maquette : appel abouti, dossier ' + id + ' pris en charge (date enregistrée). Si injoignable, il resterait « À appeler ».');
     }
   });
 
@@ -789,16 +811,25 @@
    * ------------------------------------------------------------------ */
   let myId = null;
   const myRec = () => records.find((r) => r.id === myId);
-  const statusOf = (r) => (r.cat < 2 ? 'clos' : r.callback === 'Oui' ? 'wait' : 'none');
+  const statusOf = (r) => (r.status === 'done' ? 'done' : r.cat < 2 ? 'clos' : asked(r) ? 'wait' : 'none');
 
-  /** Test terminé dans l'écran ① : nouveau dossier, daté de maintenant. */
-  function add(t) {
-    const rec = Object.assign({
-      id: 'D-' + (10241 + records.length), date: new Date(TODAY), ageDays: 0, completed: true, pecAt: null, mine: true,
-    }, t);
+  /** Étape 1 validée (« Suivant ») : test « commencé », profil seul, SANS téléphone ni e-mail.
+   *  Si le joueur revient à l'étape 1 puis repart, c'est le même test (pas de doublon). */
+  function start(profile) {
+    let rec = records.find((r) => r.id === myId && !r.completed);
+    if (!rec) {
+      rec = { id: 'D-' + (10241 + records.length), completed: false, mine: true };
+      records.unshift(rec);
+      myId = rec.id;
+    }
+    Object.assign(rec, profile, { date: new Date(TODAY), ageDays: 0 });
+    return rec;
+  }
+  /** Questions envoyées : le MÊME dossier passe à « terminé » (score, téléphone, e-mail). */
+  function complete(id, t) {
+    const rec = records.find((r) => r.id === id);
+    Object.assign(rec, t, { completed: true, status: null, pecAt: null });
     rec.status = statusOf(rec);
-    records.unshift(rec);
-    myId = rec.id;
     return rec;
   }
   /** Choix enregistrés sur la page résultat (écran ②). */
@@ -835,5 +866,5 @@
     if (b) cards.forEach((c) => setOpen(c, b.dataset.fold === '1'));
   });
 
-  window.PJR.dash = { render, notes: renderNotes, add, update };
+  window.PJR.dash = { render, notes: renderNotes, start, complete, update, data: records }; // data : lecture pour les contrôles de cohérence
 })();
