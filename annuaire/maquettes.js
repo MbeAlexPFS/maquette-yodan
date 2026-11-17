@@ -44,6 +44,15 @@ window.MAQUETTES = [
     remplacePar: "bspa-particuliers-campagnes-multi-entreprises",
   },
   {
+    dossier: "bspa-particuliers-standalone",
+    projet: "bspa-particuliers",
+    titre: "Version autonome (connexion + entreprises)",
+    description: "Variante autonome de « Campagnes multi-entreprises » : page de connexion commune Yodan / RH (mot de passe + code par e-mail), création et modification des entreprises et de leur compte RH (lien d'activation, mot de passe oublié par code, déconnexion après 30 min d'inactivité). Tests de cohérence inclus (?tests=1).",
+    ecrans: ["Connexion", "Code MFA", "Activation du compte", "Mot de passe oublié", "Entreprises", "Campagnes", "Tableau de bord & participants", "Tableau de bord RH", "Formulaire"],
+    roles: ["Médecin Yodan", "RH", "Participant"],
+    maj: "2026-11-17",
+  },
+  {
     dossier: "bspa-particuliers-campagnes-multi-entreprises",
     projet: "bspa-particuliers",
     titre: "Campagnes multi-entreprises",
