@@ -46,8 +46,27 @@
     { id: "ag-sanpedro", name: "Agence San-Pédro", appealHours: 168, weight: 13 },
     { id: "ag-daloa", name: "Agence Daloa", appealHours: 120, weight: 10 },
     { id: "ag-korhogo", name: "Agence Korhogo", appealHours: 168, weight: 6 },
-    { id: "ag-odienne", name: "Agence Odienné (ouverte en nov.)", appealHours: 168, weight: 0 },
+    { id: "ag-odienne", name: "Agence Odienné", appealHours: 168, weight: 0 },
   ];
+  /**
+   * Comptes fictifs, désignés par un code (pas de nom de personne).
+   * Superviseur : ses agences. Validateur : agences qu'il couvre. Évaluateur : une agence.
+   */
+  const SUPERVISORS = [
+    { id: "sup-1", name: "Superviseur S1", agencies: ["ag-plateau", "ag-yopougon"] },
+    { id: "sup-2", name: "Superviseur S2", agencies: ["ag-bouake", "ag-korhogo", "ag-odienne"] },
+    { id: "sup-3", name: "Superviseur S3", agencies: ["ag-sanpedro", "ag-daloa"] },
+  ];
+  const VALIDATORS = [
+    { id: "val-1", name: "Validateur V1", agencies: ["ag-plateau", "ag-yopougon"] },
+    { id: "val-2", name: "Validateur V2", agencies: ["ag-plateau"] },
+    { id: "val-3", name: "Validateur V3", agencies: ["ag-bouake", "ag-korhogo", "ag-odienne"] },
+    { id: "val-4", name: "Validateur V4", agencies: ["ag-sanpedro", "ag-daloa"] },
+  ];
+  const EVALUATORS = AGENCIES.flatMap((a, i) => Array.from({ length: a.id === "ag-plateau" ? 3 : a.id === "ag-odienne" ? 1 : 2 }, (_, k) => ({
+    id: `eva-${i + 1}-${k + 1}`, name: `Évaluateur E${i + 1}${k + 1}`, agencies: [a.id],
+  })));
+  const shortAgency = (name) => name.replace(/^Agence /, "");
   /** [libellé, poids, effet sur le score] : l'effet rend le croisement agent × zone parlant. */
   const AGENTS = [
     ["Machine", 16, 2], ["Véhicule / accident de la route", 22, 9], ["Outil à main", 12, -6], ["Chute de plain-pied", 14, -5],
@@ -104,7 +123,7 @@
    */
   function deriveDossier(f, now = NOW) {
     const zone = zoneOf(f.score);
-    const d = { ...f, zone, decision: "PENDING", automatic: false, decidedAt: null, finalAt: null, care: null };
+    const d = { ...f, zone, decision: "PENDING", automatic: false, decidedAt: null, finalAt: null, validatedBy: null, care: null };
     if (zone !== "ORANGE") {
       d.decision = zone === "VERT" ? "REJECTED" : "APPROVED";
       d.automatic = true;
@@ -113,6 +132,7 @@
     } else if (f.createdAt + f.validatorDelayH * H <= now) {
       d.decision = f.orangeApproved ? "APPROVED" : "REJECTED";
       d.decidedAt = f.createdAt + f.validatorDelayH * H;
+      d.validatedBy = f.validatorId;
       d.finalAt = d.decidedAt + agencyOf(f.agencyId).appealHours * H; // fin du délai de recours
     }
     if (d.decision !== "APPROVED") { return d; }
@@ -159,8 +179,13 @@
     const base = 24 + r() * 40 + agent[2] + (r() - 0.5) * 8;
     const drift = r() < 0.15 ? 4 : -6; // ~15 % de trajectoires défavorables
     const n = 3 + Math.floor(r() * 4);
+    const validators = VALIDATORS.filter((v) => v.agencies.includes(agencyId));
+    const evaluators = EVALUATORS.filter((e) => e.agencies.includes(agencyId));
+    const any = (list) => list[Math.floor(r() * list.length)].id;
     return {
       id, createdAt, agencyId,
+      createdBy: r() < 0.9 ? any(evaluators) : any(validators), // 10 % transmises par un validateur
+      validatorId: any(validators),
       profile: {
         sexe: r() < 0.71 ? "Homme" : "Femme",
         age, matrimonial: pick(r, MATRIMONIAL)[0], ville: pick(r, CITIES)[0], agent: agent[0],
@@ -204,9 +229,25 @@
   // ============================================================
   /** filtres : { start: "AAAA-MM-JJ", end: "AAAA-MM-JJ" (inclus), agencyId: "" | id } */
   const inPeriod = (t, f) => t >= parseDay(f.start) && t < addDays(parseDay(f.end), 1);
-  const byAgency = (db, f) => (f.agencyId ? db.filter((d) => d.agencyId === f.agencyId) : db);
+  /**
+   * Périmètre des filtres (comme KpiStats::applyFilters) : agence ; superviseur = ses agences ;
+   * validateur = demandes qu'il a décidées ou transmises ; évaluateur = demandes qu'il a transmises.
+   */
+  function scoped(db, f) {
+    const sup = f.supervisorId ? SUPERVISORS.find((x) => x.id === f.supervisorId) : null;
+    return db.filter((d) => (!f.agencyId || d.agencyId === f.agencyId)
+      && (!sup || sup.agencies.includes(d.agencyId))
+      && (!f.validatorId || d.validatedBy === f.validatorId || d.createdBy === f.validatorId)
+      && (!f.evaluatorId || d.createdBy === f.evaluatorId));
+  }
+  /** Agences couvertes par les filtres de personne (null = pas de filtre de personne). */
+  function personAgencies(f) {
+    const lists = [[SUPERVISORS, f.supervisorId], [VALIDATORS, f.validatorId], [EVALUATORS, f.evaluatorId]]
+      .filter(([, id]) => id).map(([list, id]) => list.find((x) => x.id === id).agencies);
+    return lists.length ? AGENCIES.map((a) => a.id).filter((id) => lists.every((l) => l.includes(id))) : null;
+  }
   /** Demandes (évaluations initiales) déposées dans la période. */
-  const cohort = (db, f) => byAgency(db, f).filter((d) => inPeriod(d.createdAt, f));
+  const cohort = (db, f) => scoped(db, f).filter((d) => inPeriod(d.createdAt, f));
 
   function decisionCounts(list) {
     const c = { APPROVED: 0, PENDING: 0, REJECTED: 0 };
@@ -217,7 +258,7 @@
   /** Évaluations par zone : initiales ET suivis datés dans la période (comme KpiStats::zones). */
   function zoneCounts(db, f) {
     const c = { VERT: 0, ORANGE: 0, ROUGE: 0 };
-    byAgency(db, f).forEach((d) => {
+    scoped(db, f).forEach((d) => {
       if (inPeriod(d.createdAt, f)) { c[d.zone]++; }
       (d.care?.followUps || []).forEach((u) => { if (inPeriod(u.at, f)) { c[u.zone]++; } });
     });
@@ -225,7 +266,7 @@
   }
 
   function tiles(db, f) {
-    const list = byAgency(db, f);
+    const list = scoped(db, f);
     const sessions = list.flatMap((d) => d.care?.sessions || []).filter((s) => inPeriod(s.at, f) && s.status !== "SCHEDULED");
     return {
       newRequests: cohort(db, f).length,
@@ -272,7 +313,7 @@
   const bucketOf = (ms) => (ms < 48 * H ? "lt48" : ms <= 7 * D ? "d2to7" : "gt7");
   /** Photo d'aujourd'hui (ignore la période) : attente de décision, et attente de bon. */
   function pending(db, f, now = NOW) {
-    const list = byAgency(db, f);
+    const list = scoped(db, f);
     const empty = () => ({ lt48: 0, d2to7: 0, gt7: 0 });
     const decision = empty(), voucher = empty();
     let appeal = 0;
@@ -315,7 +356,7 @@
 
   function attendance(db, f) {
     const periods = monthsOf(f);
-    const sessions = byAgency(db, f).flatMap((d) => d.care?.sessions || []).filter((s) => s.status !== "SCHEDULED");
+    const sessions = scoped(db, f).flatMap((d) => d.care?.sessions || []).filter((s) => s.status !== "SCHEDULED");
     const counts = Object.fromEntries(ATTENDANCE.map(([k]) => [k, periods.map(() => 0)]));
     sessions.forEach((s) => {
       const day = isoDay(s.at);
@@ -343,10 +384,10 @@
   }
 
   const DIMENSIONS = [
-    { key: "agent", label: "Agent matériel", of: (d) => d.profile.agent, order: "rouge" },
+    { key: "agent", label: "Agent matériel", short: "Agent", of: (d) => d.profile.agent, order: "rouge" },
     { key: "sexe", label: "Sexe", of: (d) => d.profile.sexe, order: ["Homme", "Femme"] },
     { key: "age", label: "Âge", of: (d) => ageBand(d.profile.age), order: [...AGE_BANDS.map((a) => a[0]), NOT_SET] },
-    { key: "matrimonial", label: "Situation matrimoniale", of: (d) => d.profile.matrimonial, order: MATRIMONIAL.map((m) => m[0]) },
+    { key: "matrimonial", label: "Situation matrimoniale", short: "Situation", of: (d) => d.profile.matrimonial, order: MATRIMONIAL.map((m) => m[0]) },
     { key: "ville", label: "Ville", of: (d) => d.profile.ville, order: "volume", top: 10 },
   ];
   const OTHERS = "Autres";
@@ -380,8 +421,10 @@
 
   /** Comparaison des agences : ignore le filtre agence (toutes les agences, ligne sélectionnée mise en évidence). */
   function agencies(db, f, now = NOW) {
-    return AGENCIES.map((a) => {
-      const c = db.filter((d) => d.agencyId === a.id && inPeriod(d.createdAt, f));
+    const inScope = scoped(db, { ...f, agencyId: "" });
+    const covered = personAgencies(f);
+    return AGENCIES.filter((a) => !covered || covered.includes(a.id)).map((a) => {
+      const c = inScope.filter((d) => d.agencyId === a.id && inPeriod(d.createdAt, f));
       const dc = decisionCounts(c);
       const decided = dc.APPROVED + dc.REJECTED;
       const manual = c.filter((d) => !d.automatic && d.decidedAt).map((d) => (d.decidedAt - d.createdAt) / D);
@@ -390,7 +433,7 @@
         id: a.id, name: a.name, n: c.length, small,
         approvalRate: small || !decided ? null : pct(dc.APPROVED, decided),
         decisionMedian: small || manual.length < MIN_CELL ? null : quantile(manual, 0.5),
-        pendingToday: db.filter((d) => d.agencyId === a.id && d.decision === "PENDING" && d.createdAt <= now).length,
+        pendingToday: inScope.filter((d) => d.agencyId === a.id && d.decision === "PENDING" && d.createdAt <= now).length,
       };
     });
   }
@@ -401,20 +444,20 @@
     const y = a.getFullYear(), m = a.getMonth();
     const list = [];
     if (mode === "year") {
-      for (let i = 0; i < 12; i++) { list.push({ start: isoDay(new Date(y, i, 1).getTime()), end: isoDay(new Date(y, i + 1, 1).getTime()), label: MONTHS_SHORT[i], long: `${MONTHS[i]} ${y}` }); }
+      for (let i = 0; i < 12; i++) { list.push({ start: isoDay(new Date(y, i, 1).getTime()), end: isoDay(new Date(y, i + 1, 1).getTime()), label: MONTHS_SHORT[i], short: MONTHS_SHORT[i], long: `${MONTHS[i]} ${y}` }); }
       return { title: String(y), periods: list };
     }
     if (mode === "month") {
       const next = new Date(y, m + 1, 1).getTime();
       for (let s = new Date(y, m, 1).getTime(); s < next;) {
         const e = Math.min(addDays(monday(s), 7), next);
-        list.push({ start: isoDay(s), end: isoDay(e), label: `${dayMonth(s)}-${dayMonth(addDays(e, -1))}`, long: `Du ${dayMonth(s)} au ${dayMonth(addDays(e, -1))}/${y}` });
+        list.push({ start: isoDay(s), end: isoDay(e), label: `${dayMonth(s)}-${dayMonth(addDays(e, -1))}`, short: dayMonth(s), long: `Du ${dayMonth(s)} au ${dayMonth(addDays(e, -1))}/${y}` });
         s = e;
       }
       return { title: `${MONTHS[m]} ${y}`, periods: list };
     }
     const first = monday(a.getTime());
-    for (let i = 0; i < 7; i++) { const d = addDays(first, i); list.push({ start: isoDay(d), end: isoDay(addDays(d, 1)), label: `${DAYS[i]} ${pad2(new Date(d).getDate())}`, long: `${DAYS[i]} ${dayMonth(d)}/${new Date(d).getFullYear()}` }); }
+    for (let i = 0; i < 7; i++) { const d = addDays(first, i); list.push({ start: isoDay(d), end: isoDay(addDays(d, 1)), label: `${DAYS[i]} ${pad2(new Date(d).getDate())}`, short: pad2(new Date(d).getDate()), long: `${DAYS[i]} ${dayMonth(d)}/${new Date(d).getFullYear()}` }); }
     const last = addDays(first, 6);
     return { title: `Semaine du ${dayMonth(first)} au ${dayMonth(last)}/${new Date(last).getFullYear()}`, periods: list };
   }
@@ -425,9 +468,9 @@
     return isoDay(addDays(a.getTime(), 7 * dir));
   }
   /** Évolution : demandes initiales de chaque période [start ; end[, par décision actuelle (KpiStats::evolution). */
-  function evolution(db, agencyId, list) {
+  function evolution(db, f, list) {
     const series = Object.fromEntries(DECISIONS.map(([k]) => [k, list.map(() => 0)]));
-    byAgency(db, { agencyId }).forEach((d) => {
+    scoped(db, f).forEach((d) => {
       const day = isoDay(d.createdAt);
       const i = list.findIndex((p) => day >= p.start && day < p.end);
       if (i >= 0) { series[d.decision][i]++; }
@@ -445,6 +488,8 @@
     return { top: Math.ceil(max / step) * step, step };
   }
   const EMPTY = `<p class="empty">Aucune donnée sur cette période.</p>`;
+  /** Libellé long sur PC, court sur mobile (bascule en CSS selon la largeur de l'app). */
+  const L2 = (long, short) => (short && short !== long ? `<span class="l-long">${escape(long)}</span><span class="l-short">${escape(short)}</span>` : escape(long));
   const MASKED = "moins de 5";
 
   /** Infobulle partagée d'un conteneur, positionnée près du pointeur (ou de l'élément au clavier). */
@@ -481,12 +526,13 @@
 
   /** Histogramme empilé (repris de la v1) : unité "count" ou "pct". */
   function columns(container, data) {
-    const W = 640, Hh = 250, L = 40, R = 12, T = 20, B = 30;
+    const narrow = (container.closest(".app")?.clientWidth || 999) < 520;
+    const W = narrow ? 360 : 640, Hh = narrow ? 220 : 250, L = narrow ? 34 : 40, R = 8, T = 20, B = 30;
     const n = data.periods.length;
     const isCount = data.unit === "count";
     const totals = data.periods.map((_, i) => data.series.reduce((s, x) => s + x.counts[i], 0));
     const scale = isCount ? niceScale(Math.max(...totals)) : { top: 100, step: 25 };
-    const slot = (W - L - R) / n, barWidth = Math.min(48, slot * 0.7);
+    const slot = (W - L - R) / n, barWidth = Math.min(narrow ? 28 : 48, slot * 0.7);
     const x = (i) => L + slot * i + slot / 2;
     const y = (v) => T + ((scale.top - v) / scale.top) * (Hh - T - B);
     container.innerHTML = "";
@@ -495,8 +541,8 @@
       root.append(svg("line", { x1: L, x2: W - R, y1: y(v), y2: y(v), class: "kpi-grid-line" }));
       const t = svg("text", { x: L - 6, y: y(v) + 4, "text-anchor": "end" }); t.textContent = isCount ? v : `${v} %`; root.append(t);
     }
-    const step = Math.ceil(n / 12);
-    data.periods.forEach((p, i) => { if (i % step) { return; } const t = svg("text", { x: x(i), y: Hh - 8, "text-anchor": "middle" }); t.textContent = p.label; root.append(t); });
+    const step = Math.ceil(n / (narrow ? 6 : 12));
+    data.periods.forEach((p, i) => { if (i % step) { return; } const t = svg("text", { x: x(i), y: Hh - 8, "text-anchor": "middle" }); t.textContent = narrow ? (p.short || p.label) : p.label; root.append(t); });
     data.periods.forEach((_, i) => {
       if (!totals[i]) { return; }
       let base = 0;
@@ -601,7 +647,7 @@
         : series.filter(([k]) => values[k]).map(([k, label, color]) => `<div class="hseg" style="${width(values[k])};background:${color}" tabindex="0" data-tip="${escape(`<b>${escape(r.label)}</b>${tipLine(color, label, `${values[k]}${opts.absolute ? "" : ` <small>(${fmtPct(pct(values[k], r.n))})</small>`}`)}`)}"></div>`).join("")
           + (masked ? `<div class="hseg is-masked" style="${width(masked)}" tabindex="0" data-tip="${escape(`<b>${escape(r.label)}</b><div>${series.filter(([k]) => values[k] === null && r.counts[k] > 0).map(([, l]) => escape(l)).join(", ")} : masqué</div>`)}"></div>` : "");
       const aria = r.hidden ? `${r.label} : moins de ${MIN_CELL} personnes` : `${r.label} : ${series.map(([k, l]) => `${l} ${values[k] === null ? "masqué" : values[k]}`).join(", ")}`;
-      return `<div class="hrow${r.isOther ? " is-other" : ""}"><span class="hlabel" title="${escape(r.label)}">${escape(r.label)}</span><div class="hbar${opts.absolute ? " is-abs" : ""}" role="img" aria-label="${escape(aria)}">${segs}</div><span class="hn">${r.hidden ? "" : r.n}</span></div>`;
+      return `<div class="hrow${r.isOther ? " is-other" : ""}"><span class="hlabel" title="${escape(r.label)}">${L2(r.label, r.short)}</span><div class="hbar${opts.absolute ? " is-abs" : ""}" role="img" aria-label="${escape(aria)}">${segs}</div><span class="hn">${r.hidden ? "" : r.n}</span></div>`;
     }).join("");
     container.innerHTML = `<div class="hrows">${html}</div>`
       + legendHtml(series.map(([, l, c]) => [l, c]).concat(anyMasked ? [["Masqué", "", "is-masked"]] : []))
@@ -616,14 +662,14 @@
   // ============================================================
   let db = [];
   const $ = (s) => document.querySelector(s);
-  const filters = () => ({ start: $("#f-start").value, end: $("#f-end").value, agencyId: $("#f-agency").value });
-  const statTile = (label, value, cls = "") => `<div class="tile ${cls}"><span class="tile-label">${escape(label)}</span><strong class="tile-value">${value}</strong></div>`;
+  const filters = () => ({ start: $("#f-start").value, end: $("#f-end").value, agencyId: $("#f-agency").value, supervisorId: $("#f-supervisor").value, validatorId: $("#f-validator").value, evaluatorId: $("#f-evaluator").value });
+  const statTile = (labelHtml, value, cls = "") => `<div class="tile ${cls}"><span class="tile-label">${labelHtml}</span><strong class="tile-value">${value}</strong></div>`;
 
   function renderTiles(f) {
     const t = tiles(db, f);
     $("#tiles").innerHTML = [
-      ["Nouvelles demandes", t.newRequests], ["Prises en charge en cours", t.activeCares],
-      ["Dossiers clos", t.closed], ["Taux de présence", t.attendanceRate == null ? "0 %" : fmtPct(t.attendanceRate)],
+      [L2("Nouvelles demandes", "Demandes"), t.newRequests], [L2("Prises en charge en cours", "En cours"), t.activeCares],
+      [L2("Dossiers clos", "Clos"), t.closed], [L2("Taux de présence", "Présence"), t.attendanceRate == null ? "0 %" : fmtPct(t.attendanceRate)],
     ].map(([l, v]) => statTile(l, v, "card")).join("");
   }
 
@@ -638,7 +684,7 @@
     const up = card.querySelector("[data-kpi-up]");
     up.hidden = !PARENT[curve.mode];
     up.textContent = curve.mode === "week" ? "Voir le mois" : "Voir l'année";
-    const ev = evolution(db, filters().agencyId, list);
+    const ev = evolution(db, filters(), list);
     columns($("#decision-curve"), {
       periods: list, unit: curve.unit, aria: "Demandes par période et par décision",
       series: DECISIONS.map(([k, label, color]) => ({ label, color, counts: ev[k] })),
@@ -653,6 +699,8 @@
     pie($("#decision-pie"), DECISIONS.map(([k, label, color]) => ({ n: d[k], label, color })));
   }
 
+  const FUNNEL_SHORT = { requests: "Demandes", approved: "Accordées", voucher: "Bon émis", session: "1re séance", report: "Rapport final" };
+  const DELAY_SHORT = { decision: "Décision", voucher: "Envoi du bon", session: "1re séance", duration: "Durée totale" };
   function renderFunnel(f) {
     const fu = funnel(db, f);
     const el = $("#funnel");
@@ -661,18 +709,18 @@
     el.innerHTML = `<ol class="funnel">${fu.stages.map((s, i) => {
       const prev = i ? fu.stages[i - 1].n : s.n;
       const tip = `<b>${escape(s.label)}</b>${tipLine("", "Nombre", s.n)}${tipLine("", "Part des demandes", fmtPct(pct(s.n, first)))}${i ? tipLine("", "Part de l'étape précédente", fmtPct(pct(s.n, prev))) : ""}`;
-      return `<li><div class="funnel-row"><span>${escape(s.label)}</span><strong>${s.n}</strong></div><div class="funnel-track" tabindex="0" data-tip="${escape(tip)}"><div class="funnel-bar" style="width:${Math.max(pct(s.n, first), 0.5)}%"></div></div></li>`;
+      return `<li><div class="funnel-row"><span>${L2(s.label, FUNNEL_SHORT[s.key])}</span><strong>${s.n}</strong></div><div class="funnel-track" tabindex="0" data-tip="${escape(tip)}"><div class="funnel-bar" style="width:${Math.max(pct(s.n, first), 0.5)}%"></div></div></li>`;
     }).join("")}</ol>`;
     bindTips(el);
   }
 
   function renderDelays(f) {
-    $("#delays").innerHTML = `<div class="delay-grid">${delays(db, f).map((d) => statTile(d.label, d.n >= MIN_CELL ? fmtDays(d.median) : `<span class="tile-na">Pas assez de dossiers</span>`, "delay")).join("")}</div>`;
+    $("#delays").innerHTML = `<div class="delay-grid">${delays(db, f).map((d) => statTile(L2(d.label, DELAY_SHORT[d.key]), d.n >= MIN_CELL ? fmtDays(d.median) : `<span class="tile-na">${L2("Pas assez de dossiers", "Trop peu")}</span>`, "delay")).join("")}</div>`;
   }
 
   function renderPending(f) {
     const p = pending(db, f);
-    const rows = [["decision", "Décision du validateur"], ["voucher", "Bon de prise en charge"]].map(([k, label]) => ({ label, counts: p[k], n: sum(Object.values(p[k])) }));
+    const rows = [["decision", "Décision du validateur", "Décision"], ["voucher", "Bon de prise en charge", "Bon"]].map(([k, label, short]) => ({ label, short, counts: p[k], n: sum(Object.values(p[k])) }));
     const max = Math.max(...rows.map((r) => r.n));
     if (!max) { $("#pending").innerHTML = `<p class="empty">Aucun dossier en attente.</p>`; return; }
     stackedRows($("#pending"), rows, PENDING_BUCKETS, { absolute: max, table: false });
@@ -682,8 +730,8 @@
     const p = pcl5(db, f);
     const el = $("#pcl5");
     if (p.n < MIN_CELL) { el.innerHTML = p.n ? `<p class="empty">Moins de ${MIN_CELL} personnes suivies sur cette période.</p>` : EMPTY; return; }
-    el.innerHTML = `<div class="tiles tiles-3">${statTile("Score moyen au départ", `${p.avgBefore}<small> sur 80</small>`)}${statTile("Score moyen au dernier suivi", `${p.avgAfter}<small> sur 80</small>`)}${statTile("Personnes suivies", p.n)}</div><div id="pcl5-trend"></div>`;
-    const row = { label: "Évolution du score", n: p.n, counts: { better: p.trend.better, stable: p.trend.stable, worse: p.trend.worse } };
+    el.innerHTML = `<div class="tiles tiles-3">${statTile(L2("Score moyen au départ", "Départ"), `${p.avgBefore}<small> sur 80</small>`)}${statTile(L2("Score moyen au dernier suivi", "Dernier suivi"), `${p.avgAfter}<small> sur 80</small>`)}${statTile(L2("Personnes suivies", "Suivis"), p.n)}</div><div id="pcl5-trend"></div>`;
+    const row = { label: "Évolution du score", short: "Évolution", n: p.n, counts: { better: p.trend.better, stable: p.trend.stable, worse: p.trend.worse } };
     row.shown = maskRow(row.counts);
     stackedRows($("#pcl5-trend"), [row], [["better", "Amélioration", "var(--color-success)"], ["stable", "Stable", "#9aa5b1"], ["worse", "Aggravation", "var(--color-danger)"]], { dimLabel: "Évolution" });
   }
@@ -696,7 +744,7 @@
 
   const profile = { dim: "agent" };
   function renderProfile(f) {
-    $("#profile-dims").innerHTML = DIMENSIONS.map((d) => `<button type="button" data-dim="${d.key}" aria-pressed="${d.key === profile.dim}">${escape(d.label)}</button>`).join("");
+    $("#profile-dims").innerHTML = DIMENSIONS.map((d) => `<button type="button" data-dim="${d.key}" aria-pressed="${d.key === profile.dim}">${L2(d.label, d.short)}</button>`).join("");
     $("#profile-dims").querySelectorAll("[data-dim]").forEach((b) => b.addEventListener("click", () => { profile.dim = b.dataset.dim; renderProfile(filters()); }));
     stackedRows($("#profile"), zonesBy(db, f, profile.dim), ZONES, { dimLabel: DIMENSIONS.find((d) => d.key === profile.dim).label });
   }
@@ -704,7 +752,7 @@
   const agencySort = { key: "n", dir: -1 };
   function renderAgencies(f) {
     const rows = agencies(db, f);
-    const cols = [["name", "Agence"], ["n", "Demandes"], ["approvalRate", "Taux de prise en charge"], ["decisionMedian", "Délai de décision"], ["pendingToday", "En attente"]];
+    const cols = [["name", "Agence"], ["n", "Demandes", "Dem."], ["approvalRate", "Taux de prise en charge", "Taux"], ["decisionMedian", "Délai de décision", "Délai"], ["pendingToday", "En attente", "Attente"]];
     const sorted = [...rows].sort((a, b) => {
       const va = a[agencySort.key], vb = b[agencySort.key];
       if (va == null) { return 1; } if (vb == null) { return -1; }
@@ -712,8 +760,9 @@
     });
     const max = (k) => Math.max(1, ...rows.map((r) => r[k] || 0));
     const cell = (v, m, text) => (v == null ? `<span class="muted">masqué</span>` : `<div class="cellbar"><span style="width:${(v / m) * 100}%"></span><b>${text}</b></div>`);
-    $("#agencies").innerHTML = `<div class="wrap"><table class="agency-table"><thead><tr>${cols.map(([k, l]) => `<th aria-sort="${agencySort.key === k ? (agencySort.dir > 0 ? "ascending" : "descending") : "none"}"><button type="button" data-sort="${k}" class="${agencySort.key === k ? `is-sorted ${agencySort.dir > 0 ? "asc" : "desc"}` : ""}">${l}</button></th>`).join("")}</tr></thead><tbody>${sorted.map((r) => `<tr class="${r.id === f.agencyId ? "is-selected" : ""}">
-      <td>${escape(r.name)}</td>
+    if (!sorted.length) { $("#agencies").innerHTML = EMPTY; return; }
+    $("#agencies").innerHTML = `<div class="wrap"><table class="agency-table"><thead><tr>${cols.map(([k, l, sh]) => `<th aria-sort="${agencySort.key === k ? (agencySort.dir > 0 ? "ascending" : "descending") : "none"}"><button type="button" data-sort="${k}" class="${agencySort.key === k ? `is-sorted ${agencySort.dir > 0 ? "asc" : "desc"}` : ""}">${L2(l, sh)}</button></th>`).join("")}</tr></thead><tbody>${sorted.map((r) => `<tr class="${r.id === f.agencyId ? "is-selected" : ""}">
+      <td>${L2(r.name, shortAgency(r.name))}</td>
       <td>${cell(r.n, max("n"), r.n)}</td>
       <td>${cell(r.approvalRate, 100, r.approvalRate == null ? "" : fmtPct(r.approvalRate))}</td>
       <td>${cell(r.decisionMedian, max("decisionMedian"), fmtDays(r.decisionMedian))}</td>
@@ -740,8 +789,14 @@
 
   function boot() {
     db = generate();
-    $("#f-agency").innerHTML += AGENCIES.map((a) => `<option value="${a.id}">${escape(a.name)}</option>`).join("");
-    ["#f-start", "#f-end", "#f-agency"].forEach((s) => $(s).addEventListener("change", renderAll));
+    const options = (list) => list.map((x) => `<option value="${x.id}">${escape(x.name)}</option>`).join("");
+    $("#f-agency").innerHTML += options(AGENCIES);
+    $("#f-supervisor").innerHTML += options(SUPERVISORS);
+    $("#f-validator").innerHTML += options(VALIDATORS);
+    $("#f-evaluator").innerHTML += AGENCIES.map((a) => `<optgroup label="${escape(shortAgency(a.name))}">${options(EVALUATORS.filter((e) => e.agencies[0] === a.id))}</optgroup>`).join("");
+    ["#f-start", "#f-end", "#f-agency", "#f-supervisor", "#f-validator", "#f-evaluator"].forEach((s) => $(s).addEventListener("change", renderAll));
+    let resizeTimer;
+    window.addEventListener("resize", () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(renderAll, 200); });
     document.querySelectorAll(".fold").forEach((b) => b.addEventListener("click", () => setFold(b, b.getAttribute("aria-expanded") !== "true")));
     const card = $("#decision-curve-card");
     card.querySelectorAll("[data-kpi-mode]").forEach((b) => b.addEventListener("click", () => { curve.mode = b.dataset.kpiMode; renderCurve(); }));
@@ -770,7 +825,8 @@
 
   window.ATMP = {
     boot, setFold, renderAll, get db() { return db; }, set db(v) { db = v; },
-    NOW, TODAY, H, D, MIN_CELL, PCL5_CHANGE, FOLLOW_UP_MONTHS, ZONES, DECISIONS, DIMENSIONS, AGENCIES, OTHERS,
+    NOW, TODAY, H, D, MIN_CELL, PCL5_CHANGE, FOLLOW_UP_MONTHS, ZONES, DECISIONS, DIMENSIONS, AGENCIES, OTHERS, SUPERVISORS, VALIDATORS, EVALUATORS,
+    scoped, personAgencies,
     zoneOf, deriveDossier, randomFacts, generate, rng, parseDay, addDays, addMonths, isoDay,
     cohort, decisionCounts, zoneCounts, tiles, funnel, delays, pending, pcl5, attendance, zonesBy, maskRow, agencies, evolution, periods, monthsOf,
   };

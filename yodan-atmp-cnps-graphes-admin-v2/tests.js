@@ -97,7 +97,7 @@ function runTests() {
   });
   test("Cohérence · histogramme de l'année = camembert Prise en charge sur l'année, décision par décision", () => {
     const { periods } = A.periods("year", A.TODAY);
-    const ev = A.evolution(db, "", periods);
+    const ev = A.evolution(db, { agencyId: "" }, periods);
     const dc = A.decisionCounts(A.cohort(db, YEAR));
     A.DECISIONS.forEach(([k]) => eq(sum(ev[k]), dc[k], `décision ${k}`));
   });
@@ -141,6 +141,51 @@ function runTests() {
     eq(sum(Object.values(p.trend)), p.n, "tendance");
     eq(sum(p.rows.map((r) => sum(Object.values(r.counts)))), p.n, "transitions");
     assert(p.n > 0, "aucune paire : données de démonstration insuffisantes");
+  });
+
+  /* ---------- Filtres par personne (KpiStats::applyFilters) ---------- */
+  test("Invariant · auteur = évaluateur de l'agence ou validateur qui la couvre ; validateur renseigné seulement pour une décision manuelle", () => {
+    db.forEach((d) => {
+      const author = [...A.EVALUATORS, ...A.VALIDATORS].find((u) => u.id === d.createdBy);
+      assert(author && author.agencies.includes(d.agencyId), `${d.id} : auteur hors agence`);
+      if (d.validatedBy) {
+        assert(!d.automatic && d.decision !== "PENDING", `${d.id} : validateur sur une décision automatique ou en attente`);
+        assert(A.VALIDATORS.find((v) => v.id === d.validatedBy).agencies.includes(d.agencyId), `${d.id} : validateur hors agence`);
+      } else { assert(d.automatic || d.decision === "PENDING", `${d.id} : décision manuelle sans validateur`); }
+    });
+  });
+  test("Filtres · superviseur = somme de ses agences, sur tous les blocs", () => {
+    A.SUPERVISORS.forEach((sup) => {
+      const f = { ...DEFAULT, supervisorId: sup.id };
+      const per = (fn) => sum(sup.agencies.map((id) => fn({ ...DEFAULT, agencyId: id })));
+      eq(A.cohort(db, f).length, per((x) => A.cohort(db, x).length), `${sup.name} : demandes`);
+      eq(A.tiles(db, f).closed, per((x) => A.tiles(db, x).closed), `${sup.name} : clos`);
+      eq(A.funnel(db, f).stages.map((x) => x.n), sup.agencies.map((id) => A.funnel(db, { ...DEFAULT, agencyId: id }).stages.map((x) => x.n)).reduce((acc, v) => acc.map((n, i) => n + v[i])), `${sup.name} : parcours`);
+    });
+  });
+  test("Filtres · validateur = demandes qu'il a décidées OU transmises, sans doublon", () => {
+    A.VALIDATORS.forEach((v) => {
+      const c = A.cohort(db, { ...DEFAULT, validatorId: v.id });
+      const expected = A.cohort(db, DEFAULT).filter((d) => d.validatedBy === v.id || d.createdBy === v.id);
+      eq(c.map((d) => d.id), expected.map((d) => d.id), v.name);
+      assert(c.some((d) => d.validatedBy === v.id) && c.some((d) => d.createdBy === v.id), `${v.name} : les deux cas doivent exister dans les données`);
+    });
+  });
+  test("Filtres · chaque demande a un seul auteur : somme des évaluateurs + validateurs auteurs = total", () => {
+    const n = sum([...A.EVALUATORS, ...A.VALIDATORS].map((u) => A.cohort(db, { ...DEFAULT, evaluatorId: u.id }).length));
+    eq(n, A.cohort(db, DEFAULT).length, "partition par auteur");
+  });
+  test("Filtres · tableau des agences limité aux agences de la personne filtrée", () => {
+    eq(A.agencies(db, { ...DEFAULT, supervisorId: "sup-3" }).map((r) => r.id), ["ag-sanpedro", "ag-daloa"], "superviseur S3");
+    eq(A.agencies(db, { ...DEFAULT, evaluatorId: A.EVALUATORS[0].id }).map((r) => r.id), [A.EVALUATORS[0].agencies[0]], "évaluateur");
+    eq(A.agencies(db, DEFAULT).length, A.AGENCIES.length, "sans filtre : toutes");
+  });
+  test("Cas limite · filtres incompatibles (superviseur S1 et agence Bouaké) : tout à zéro, aucun NaN", () => {
+    const f = { ...DEFAULT, supervisorId: "sup-1", agencyId: "ag-bouake" };
+    eq(A.cohort(db, f).length, 0, "demandes");
+    eq(A.tiles(db, f).attendanceRate, null, "présence");
+    eq(A.agencies(db, f).map((r) => r.id), ["ag-plateau", "ag-yopougon"], "agences : celles du superviseur (le filtre Agence ne fait que surligner)");
+    assert(!JSON.stringify([A.funnel(db, f), A.delays(db, f), A.pcl5(db, f), A.pending(db, f)]).includes("NaN"), "NaN");
   });
 
   /* ---------- Visibilité / protection (règle 4.1.7) ---------- */
@@ -263,6 +308,18 @@ function runTests() {
       stage.classList.toggle("is-mobile", wasMobile);
       folds.forEach((b, i) => A.setFold(b, before[i]));
     }
+  });
+
+  test("Interface · en mobile, tuiles et barre de filtres gardent une marge intérieure (texte jamais collé au bord)", () => {
+    const stage = document.getElementById("stage");
+    const wasMobile = stage.classList.contains("is-mobile");
+    try {
+      stage.classList.add("is-mobile");
+      document.querySelectorAll("#app .tile, #app .filters").forEach((el) => {
+        const cs = getComputedStyle(el);
+        ["paddingTop", "paddingLeft", "paddingRight"].forEach((k) => assert(parseFloat(cs[k]) >= 8, `${el.className} : ${k} = ${cs[k]}`));
+      });
+    } finally { stage.classList.toggle("is-mobile", wasMobile); }
   });
 
   const ok = results.filter((r) => r.ok).length;

@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Maquette - Graphes admin ATMP CNPS v2</title>
-  <link rel="stylesheet" href="styles.css?v=2.1.2">
+  <link rel="stylesheet" href="styles.css?v=2.2.1">
 </head>
 <body>
   <header class="mock-bar">
@@ -31,9 +31,11 @@
             <label for="f-start">Du</label><input type="date" id="f-start" value="2026-01-01">
             <label for="f-end">au</label><input type="date" id="f-end" value="2026-11-17">
           </div>
-          <div class="kpi-period">
-            <label for="f-agency">Agence</label>
-            <select id="f-agency"><option value="">Toutes les agences</option></select>
+          <div class="filter-selects">
+            <label class="fsel"><span>Agence</span><select id="f-agency"><option value="">Toutes</option></select></label>
+            <label class="fsel"><span>Superviseur</span><select id="f-supervisor"><option value="">Tous</option></select></label>
+            <label class="fsel"><span>Validateur</span><select id="f-validator"><option value="">Tous</option></select></label>
+            <label class="fsel"><span>Évaluateur</span><select id="f-evaluator"><option value="">Tous</option></select></label>
           </div>
         </div>
 
@@ -145,7 +147,15 @@
         <li>Aucun texte d'explication dans l'interface : seulement des titres, des chiffres et des graphes. Les définitions sont ci-dessous.</li>
         <li>Chaque carte se replie et se déplie en cliquant sur son titre. La vue d'ensemble est dépliée, les autres cartes sont repliées.</li>
         <li>Le détail de chaque barre s'affiche au survol (ou au clavier). « Voir les données » reste disponible pour l'accessibilité.</li>
-        <li>Un seul filtre Période et Agence pour toute la page. L'histogramme garde sa navigation semaine, mois, année.</li>
+        <li>Une seule barre de filtres pour toute la page. L'histogramme garde sa navigation semaine, mois, année.</li>
+      </ul>
+
+      <span class="tag">Version 2.2</span>
+      <ul class="after">
+        <li>Filtres <b>Superviseur</b>, <b>Validateur</b> et <b>Évaluateur</b>, avec les mêmes règles que <code>KpiStats</code> : superviseur = ses agences ; validateur = demandes qu'il a décidées ou transmises ; évaluateur = demandes qu'il a transmises. Ils s'appliquent à tous les blocs.</li>
+        <li>Le tableau des agences ne montre que les agences de la personne filtrée. Le filtre Agence, lui, ne fait que surligner la ligne.</li>
+        <li>Mobile : libellés courts (« Demandes », « En cours », « Taux »…), espacements réduits, histogramme redessiné pour la petite largeur.</li>
+        <li>Comptes fictifs désignés par un code (S1, V1, E11), jamais par un nom de personne.</li>
       </ul>
 
       <span class="tag">Définitions</span>
@@ -169,6 +179,7 @@
       <ol class="questions">
         <li>Cartes repliées par défaut hors vue d'ensemble : OK ? Faut-il mémoriser l'état replié ?</li>
         <li>Filtre Période unique pour toute la page : OK ?</li>
+        <li>Filtre Évaluateur aussi pour le super admin ? Dans l'application, il n'existe aujourd'hui que sur le tableau de bord du superviseur (le calcul le permet déjà).</li>
         <li>Seuil d'amélioration PCL-5 de 10 points : à valider avec les cliniciens Yodan.</li>
         <li>Paliers d'attente (moins de 48 h, 2 à 7 jours, plus de 7 jours) : OK, ou alignés sur le délai de recours de chaque agence ?</li>
         <li>Ville : détail par commune pour Abidjan ?</li>
@@ -179,8 +190,8 @@
     </aside>
   </div>
 
-  <script src="app.js?v=2.1.2"></script>
-  <script src="tests.js?v=2.1.2"></script>
+  <script src="app.js?v=2.2.1"></script>
+  <script src="tests.js?v=2.2.1"></script>
   <script>window.ATMP.boot();</script>
 </body>
 </html>

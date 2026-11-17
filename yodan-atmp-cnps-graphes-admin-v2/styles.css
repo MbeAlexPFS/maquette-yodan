@@ -227,7 +227,7 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 3
 .fold[aria-expanded="true"]::after { transform: rotate(-135deg); }
 .card-body { padding: 0 1.2rem 1.2rem; }
 .card-body > .kpi-tools { margin-bottom: .8rem; }
-#stage.is-mobile .card { padding: 0; }
+#stage.is-mobile .kpi-card { padding: 0; }
 #stage.is-mobile .card-body { padding: 0 .8rem 1rem; }
 .kpi-tools { justify-content: flex-start; }
 
@@ -259,3 +259,45 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 3
 .stack .kpi-chart > svg { max-height: 300px; }
 /* Les éléments de grille ne doivent pas s'élargir au contenu (onglets, tableau) : ils défilent dans la carte. */
 .stack > *, .card-body, .kpi-tools { min-width: 0; max-width: 100%; }
+
+/* =================== v2.2 : filtres par personne, mobile allégé =================== */
+.filter-selects { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .5rem .8rem; flex: 1 1 32rem; }
+.fsel { display: flex; flex-direction: column; gap: .15rem; font-size: .74rem; color: var(--color-text-light); min-width: 0; }
+.fsel select { width: 100%; }
+.l-short { display: none; }
+
+@container (max-width: 520px) {
+  .l-long { display: none; }
+  .l-short { display: inline; }
+  .filters { padding: .6rem; gap: .5rem; }
+  .filter-selects { grid-template-columns: repeat(2, minmax(0, 1fr)); flex-basis: 100%; }
+  .kpi-period input { max-width: 8.2rem; }
+  .app-head { margin-bottom: .6rem; }
+  .app-head h1 { font-size: 1.2rem; }
+  .section-title { font-size: .95rem; margin: 1.2rem 0 .5rem; }
+  .tiles { gap: .5rem; margin-bottom: 1rem; }
+  .tiles .tile, .tiles-3 .tile, .delay { padding: .55rem .65rem; }
+  .tile-label { font-size: .66rem; letter-spacing: .03em; }
+  .tile-value { font-size: 1.2rem; }
+  .tiles-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .4rem; }
+  .delay-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .5rem; }
+  .fold { padding: .75rem .8rem; font-size: .72rem; }
+  .card-body { padding: 0 .8rem .9rem; }
+  .kpi-grid, .kpi-side, .stack { gap: .75rem; }
+  .hrow { grid-template-columns: 5.5rem minmax(0, 1fr) 2.2rem; gap: .4rem; font-size: .76rem; }
+  .hrow .hlabel { grid-column: auto; }
+  .hrow .hbar { grid-column: auto; height: 18px; }
+  .kpi-legend { gap: .3rem .8rem; font-size: .74rem; }
+  .funnel { gap: .5rem; }
+  .funnel-row { font-size: .78rem; }
+  .funnel-track { height: 10px; }
+  .kpi-segmented button { padding: .25rem .6rem; font-size: .74rem; }
+  .agency-table { font-size: .76rem; }
+  .agency-table th button { padding: .4rem .3rem; font-size: .7rem; }
+  .agency-table td { padding: .35rem .3rem; }
+  .cellbar { min-width: 3.2rem; }
+  .pie-legend li { font-size: .78rem; }
+}
+/* Mobile : tuiles et filtres gardent une marge intérieure confortable. */
+#stage.is-mobile .filters { padding: .75rem; }
+#stage.is-mobile .tiles .tile { padding: .65rem .75rem; }
