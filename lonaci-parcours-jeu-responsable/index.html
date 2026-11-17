@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Montserrat:wght@600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="shell.css?v=1">
+  <link rel="stylesheet" href="shell.css?v=3">
   <link rel="stylesheet" href="form.css?v=1">
   <link rel="stylesheet" href="result.css?v=1">
   <link rel="stylesheet" href="dash.css?v=1">
@@ -242,7 +242,7 @@
               <section class="card span-6">
                 <h2>Demande d'appel et accompagnement</h2>
                 <p class="sub">Proposés sur la page résultat : l'appel aux joueurs à risque (modéré, excessif), l'accompagnement au jeu excessif. « Non » et « Sans réponse » ne sont pas rappelés ; la personne reste libre d'appeler le 9999.</p>
-                <div id="consent"></div>
+                <div id="consent-chart"></div>
               </section>
 
               <section class="card span-6">
@@ -315,7 +315,14 @@
                     <p class="sub">On n'appelle que les personnes qui ont demandé un appel. Le numéro s'affiche à la demande et chaque affichage est journalisé.</p>
                   </div>
                   <div class="queue-tools">
-                    <label class="mini">Afficher
+                    <form class="q-search" id="q-search" role="search" novalidate>
+                      <label class="mini" for="q-term">Rechercher par téléphone ou e-mail
+                        <input class="q-input" id="q-term" type="search" inputmode="email" autocomplete="off" placeholder="Numéro ou e-mail complet" aria-describedby="q-err">
+                      </label>
+                      <button type="submit" class="btn-act">Rechercher</button>
+                      <button type="button" class="btn-act sec" id="q-clear" hidden>Effacer</button>
+                    </form>
+                    <label class="mini" id="q-filter-wrap">Afficher
                       <select id="q-filter">
                         <option value="todo">À appeler (demande = Oui, en attente)</option>
                         <option value="all">Tous les dossiers à risque</option>
@@ -323,13 +330,16 @@
                     </label>
                   </div>
                 </div>
+                <p class="q-err" id="q-err" role="alert" hidden></p>
+                <p class="q-banner" id="q-banner" hidden></p>
                 <div class="table-wrap">
                   <table class="qtable" id="qtable">
                     <thead>
                       <tr>
                         <th scope="col">Priorité</th>
                         <th scope="col">Dossier</th>
-                        <th scope="col">Contact</th>
+                        <th scope="col">Téléphone</th>
+                        <th scope="col">E-mail</th>
                         <th scope="col">Date du test</th>
                         <th scope="col">Ancienneté</th>
                         <th scope="col">Commune / ville</th>
@@ -345,7 +355,17 @@
                     <tbody></tbody>
                   </table>
                 </div>
-                <p class="small muted" id="q-count"></p>
+                <div class="pager-row">
+                  <p class="small muted" id="q-count"></p>
+                  <nav class="pager" id="q-pager" aria-label="Pagination des dossiers"></nav>
+                  <label class="mini pager-size">Par page
+                    <select id="q-size">
+                      <option value="10" selected>10</option>
+                      <option value="25">25</option>
+                      <option value="50">50</option>
+                    </select>
+                  </label>
+                </div>
               </section>
 
               <!-- Repère de maquette : ce que LONACI ne voit pas -->
@@ -369,10 +389,10 @@
   <div class="tip" id="tip" role="tooltip" hidden></div>
   <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
-  <script src="app.js?v=1"></script>
-  <script src="form.js?v=1"></script>
+  <script src="app.js?v=2"></script>
+  <script src="form.js?v=3"></script>
   <script src="result.js?v=1"></script>
-  <script src="dash.js?v=1"></script>
+  <script src="dash.js?v=4"></script>
   <script>PJR.boot();</script>
 </body>
 </html>

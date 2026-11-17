@@ -32,7 +32,7 @@ window.PJR = (function () {
     const rec = PJR.dash.add({
       city: t.profile.commune || t.profile.ville, zone: t.profile.commune ? 'Abidjan' : 'Intérieur',
       age: t.profile.age, sexe: t.profile.sexe, plat: t.profile.plat, canal: t.profile.canal,
-      score: t.score, cat, answers: t.answers, phone: t.phone,
+      score: t.score, cat, answers: t.answers, phone: t.phone, email: t.email,
       callback: cat >= 2 ? 'Sans réponse' : '-', support: cat === 3 ? 'Sans réponse' : '-',
     });
     state.current = { id: rec.id, cat, score: t.score, phone: t.phone };

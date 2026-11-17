@@ -61,6 +61,43 @@ button, input, select { font: inherit; color: inherit; }
 .tip { position: fixed; z-index: 50; pointer-events: none; background: #1f1a17; color: #fff; font-size: .76rem; padding: .4rem .6rem; border-radius: 8px; max-width: 260px; box-shadow: 0 6px 18px rgba(0,0,0,.2); }
 .toast { position: fixed; z-index: 60; left: 50%; bottom: 24px; transform: translateX(-50%); max-width: min(92vw, 640px); background: #1f1a17; color: #fff; padding: .6rem 1rem; border-radius: 10px; font-size: .86rem; box-shadow: 0 8px 24px rgba(0,0,0,.25); }
 
+/* Recherche + pagination de la liste des dossiers (YODAN) */
+.scr-dash .queue-tools { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px 14px; }
+.scr-dash .q-search { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 6px; }
+.scr-dash .q-input { min-width: 240px; padding: .42rem .6rem; border: 1px solid #e7e2dd; border-radius: 9px; background: #fff; font-size: .85rem; font-weight: 500; }
+.scr-dash .q-input:focus { outline: none; border-color: #3c210e; box-shadow: 0 0 0 3px rgba(60,33,14,.15); }
+.scr-dash .q-search .btn-act { padding: .45rem .75rem; }
+.scr-dash .q-err { margin: 8px 0 0; font-size: .8rem; color: #b91c1c; }
+.scr-dash .q-banner { margin: 8px 0 10px; padding: .5rem .75rem; border-radius: 10px; background: #e8f0fb; color: #184f95; font-size: .8rem; }
+.scr-dash .pager-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; margin-top: 10px; }
+.scr-dash .pager-row #q-count { margin: 0; }
+.scr-dash .pager { display: flex; flex-wrap: wrap; gap: 4px; }
+.scr-dash .pager button { min-width: 34px; height: 32px; padding: 0 .55rem; border: 1px solid #e7e2dd; border-radius: 8px; background: #fff; font-size: .8rem; font-weight: 600; cursor: pointer; }
+.scr-dash .pager button:hover:not(:disabled) { border-color: #3c210e; }
+.scr-dash .pager button[aria-current="page"] { background: #3c210e; border-color: #3c210e; color: #fff; }
+.scr-dash .pager button:disabled { opacity: .4; cursor: default; }
+.scr-dash .pager .gap { align-self: center; padding: 0 2px; color: #6b7280; }
+.scr-dash .pager-size { flex-direction: row !important; align-items: center; gap: 6px !important; }
+.scr-dash .pager-size select { min-width: 0 !important; }
+.scr-dash .contact-mail { display: block; font-size: .74rem; color: #57504c; }
+@container (max-width: 560px) {
+  .scr-dash .q-search, .scr-dash .q-search label { width: 100%; }
+  .scr-dash .q-input { min-width: 0; width: 100%; }
+  .scr-dash .pager-row { flex-direction: column; align-items: stretch; }
+}
+
 /* Repère du test passé dans la maquette (file d'appels) */
 .scr-dash tr.mine td { background: #fff8ec; }
 .scr-dash .badge-mine { display: inline-block; margin-left: 6px; font-size: .64rem; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; color: #8a5a00; background: #fff1cc; border: 1px dashed #e0b44a; border-radius: 6px; padding: 0 .35rem; }
+
+/* Blocs repliables du tableau de bord */
+.scr-dash .fold-all { display: flex; justify-content: flex-end; gap: 8px; margin: 0 0 10px; }
+.scr-dash .card-toggle { all: unset; box-sizing: border-box; display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; cursor: pointer; font: inherit; color: inherit; }
+.scr-dash .card-toggle::after { content: ""; flex: none; width: 8px; height: 8px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(45deg); margin: -4px 4px 0; transition: transform .15s; }
+.scr-dash .card.collapsed .card-toggle::after { transform: rotate(-45deg); margin-top: 0; }
+.scr-dash .card-toggle:focus-visible { outline: 2px solid #3c210e; outline-offset: 4px; border-radius: 4px; }
+.scr-dash .card.collapsed { align-self: start; }
+.scr-dash .card.collapsed .card-body { display: none; }
+.scr-dash .mail-mask { color: #57504c; font-variant-numeric: tabular-nums; }
+.scr-dash .consent-title { flex-wrap: wrap; gap: 2px 12px; }
+.scr-dash .consent-title > span:last-child { white-space: nowrap; }

@@ -120,13 +120,14 @@
     records.push(Object.assign(base, {
       completed: true, score, cat, answers, callback, support, status, pecAt,
       phone: '00 00 ' + d2() + ' ' + d2() + ' ' + d2(), // numéro volontairement invalide (fictif)
+      email: R() < .35 ? 'joueur' + (10241 + i) + '@exemple.test' : null, // e-mail facultatif, domaine fictif
     }));
   }
 
   /* ------------------------------------------------------------------
    * 2. État, filtres, masquage
    * ------------------------------------------------------------------ */
-  const state = { role: 'lonaci', period: '90', zone: '', sexe: '', canal: '', plat: '', qfilter: 'todo' };
+  const state = { role: 'lonaci', period: '90', zone: '', sexe: '', canal: '', plat: '', qfilter: 'todo', page: 1, size: 10, search: null };
   const $ = (s) => document.querySelector(s);
   const fmt = (n) => n.toLocaleString('fr-FR');
   const isL = () => window.PJR.state.role === 'lonaci'; // profil choisi dans la barre de maquette
@@ -259,7 +260,7 @@
       return '<div class="consent-block"><div class="consent-title"><span style="color:var(--text);font-weight:700;font-size:.84rem">' + title + ' <span>· ' + popLabel + ' (' + nTxt(pop.length) + ')</span></span><span>acceptation <b>' + pTxt(rate(counts[0], sum(counts))) + '</b></span></div>' +
         stack(counts, C3, L3, [2]) + '</div>';
     };
-    $('#consent').innerHTML = legend(L3, C3) +
+    $('#consent-chart').innerHTML = legend(L3, C3) +
       block('Demande d\'appel', risk, 'callback', 'proposée aux joueurs à risque') +
       block('Accompagnement', risk.filter((r) => r.cat === 3), 'support', 'proposé au jeu excessif') +
       '<p class="small muted" style="margin:10px 0 0">Acceptation = Oui ÷ (Oui + Non + Sans réponse). <b>Non</b> = formulaire envoyé sans cocher ; <b>Sans réponse</b> = page résultat quittée sans rien envoyer. Zone verte : rien n\'est proposé (tests clos).</p>';
@@ -485,27 +486,68 @@
   const PRIO = { 1: 'Jeu excessif + demande d\'appel', 2: 'Risque modéré + demande d\'appel' };
   const revealed = new Set();
 
+  /* Recherche par contact : correspondance EXACTE seulement (numéro normalisé ou e-mail complet),
+     pour qu'on ne puisse pas parcourir les contacts avec un morceau de numéro. */
+  const normPhone = (s) => { let d = String(s || '').replace(/\D/g, ''); if (d.startsWith('225') && d.length > 10) d = d.slice(3); return d; };
+  const normEmail = (s) => String(s || '').trim().toLowerCase();
+  function parseSearch(term) {
+    const t = term.trim();
+    if (!t) return { error: 'Saisissez un numéro de téléphone ou une adresse e-mail.' };
+    if (t.includes('@')) return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(t) ? { type: 'email', value: normEmail(t) } : { error: 'Adresse e-mail incomplète : saisissez l\'adresse entière.' };
+    const d = normPhone(t);
+    return d.length >= 8 ? { type: 'phone', value: d } : { error: 'Numéro incomplet : saisissez le numéro entier (8 chiffres ou plus).' };
+  }
+  // Exemple pour les notes : un dossier « Sans réponse » avec e-mail (montre la prise en charge sur appel entrant)
+  const exampleContact = () => records.find((r) => r.completed && r.cat >= 2 && r.status === 'none' && r.email && r.ageDays > 20);
+  const maskEmail = (e) => { const [u, dom] = String(e).split('@'); return u.charAt(0) + '•••@' + dom; };
+  const matches = (r, s) => (s.type === 'phone' ? normPhone(r.phone) === s.value : normEmail(r.email) === s.value);
+
   function renderQueue(risk) {
-    let q = state.qfilter === 'todo' ? risk.filter((r) => r.status === 'wait') : risk.slice();
+    const s = state.search;
+    let q;
+    if (s) {
+      // La recherche porte sur tous les dossiers à risque, quels que soient la période et les filtres du tableau de bord
+      q = records.filter((r) => r.completed && atRisk(r) && matches(r, s));
+    } else {
+      q = state.qfilter === 'todo' ? risk.filter((r) => r.status === 'wait') : risk.slice();
+    }
     q = q.map((r) => ({ r, p: r.status === 'wait' ? (r.cat === 3 ? 1 : 2) : 9 }))
       .sort((a, b) => a.p - b.p || (a.p < 9 ? b.r.ageDays - a.r.ageDays : b.r.date - a.r.date));
-    const shown = q.slice(0, 30);
+    const pages = Math.max(1, Math.ceil(q.length / state.size));
+    state.page = Math.min(state.page, pages);
+    const from = (state.page - 1) * state.size;
+    const shown = q.slice(from, from + state.size);
+    $('#q-filter-wrap').hidden = !!s;
+    $('#q-clear').hidden = !s;
+    $('#q-banner').hidden = !s;
+    if (s) $('#q-banner').textContent = (q.length ? q.length + ' dossier' + (q.length > 1 ? 's' : '') + ' trouvé' + (q.length > 1 ? 's' : '') : 'Aucun dossier à risque trouvé') +
+      ' pour ' + (s.type === 'phone' ? 'ce numéro' : 'cet e-mail') + ' (toutes périodes, filtres du tableau de bord ignorés).';
     const chip = (v) => (v === 'Oui' ? '<span class="chip oui">Oui</span>' : v === 'Non' ? '<span class="chip">Non</span>' : v === 'Sans réponse' ? '<span class="chip sr">Sans réponse</span>' : '<span class="muted" title="Non proposé pour cette zone">—</span>');
     const statusCell = (r) => (r.status === 'wait'
       ? '<button type="button" class="btn-act" data-act="call" data-id="' + r.id + '">Appeler</button>'
       : r.status === 'done'
         ? '<span class="stat-done">Pris en charge le ' + shortDate(r.pecAt) + '</span>'
-        : '<span class="btn-act none">' + r.callback + ' · pas d\'appel</span>');
+        : s // trouvé par recherche = le joueur appelle lui-même (9999) : on peut le prendre en charge
+          ? '<button type="button" class="btn-act sec" data-act="take" data-id="' + r.id + '" data-tip="' + esc('Appel entrant : la personne a contacté le 9999 (demande d\'appel : ' + r.callback + ')') + '">Prendre en charge</button>'
+          : '<span class="btn-act none">' + r.callback + ' · pas d\'appel</span>');
     const td = (l, html) => '<td data-l="' + l + '"><span>' + html + '</span></td>';
     $('#qtable tbody').innerHTML = shown.map(({ r, p }) => {
-      const phone = r.status !== 'wait' ? '<span class="muted">—</span>'
-        : revealed.has(r.id) ? '<span class="phone-num">' + r.phone + '</span>'
-          : '<button type="button" class="btn-phone" data-act="phone" data-id="' + r.id + '">Afficher le n°</button>';
+      // Contact proposé pour les dossiers à appeler, ou pour un dossier retrouvé par recherche
+      const eligible = r.status === 'wait' || !!s;
+      const shownC = eligible && revealed.has(r.id);
+      const phone = !eligible ? '<span class="muted">—</span>'
+        : shownC ? '<span class="phone-num">' + esc(r.phone) + '</span>'
+          : '<button type="button" class="btn-phone" data-act="phone" data-id="' + r.id + '">Afficher le contact</button>';
+      // E-mail : « aucun » s'il n'a pas été saisi ; masqué tant que le contact n'est pas affiché (affichage journalisé)
+      const mail = !r.email ? '<span class="muted">Aucun</span>'
+        : shownC ? '<span class="contact-mail">' + esc(r.email) + '</span>'
+          : '<span class="mail-mask" data-tip="Masqué : « Afficher le contact » l\'affiche en entier">' + esc(maskEmail(r.email)) + '</span>';
       const dt = r.date.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' }) + ' ' + r.date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
       return '<tr' + (r.mine ? ' class="mine"' : '') + '>' +
         td('Priorité', p < 9 ? '<span class="prio p' + (p === 1 ? 1 : 3) + '" data-tip="' + esc(PRIO[p]) + '">' + p + '</span>' : '<span class="muted">—</span>') +
         td('Dossier', '<b>' + r.id + '</b>' + (r.mine ? '<span class="badge-mine" data-tip="Test passé dans l\'écran ① de la maquette">votre test</span>' : '')) +
-        td('Contact', phone) +
+        td('Téléphone', phone) +
+        td('E-mail', mail) +
         td('Date du test', dt) +
         td('Ancienneté', '<b>' + r.ageDays + ' j</b>') +
         td('Commune / ville', esc(r.city) + ' <span class="muted">· ' + r.zone + '</span>') +
@@ -516,10 +558,26 @@
         td('Appel', chip(r.callback)) +
         td('Accomp.', chip(r.support)) +
         td('Statut / action', statusCell(r)) + '</tr>';
-    }).join('') || '<tr><td colspan="13" class="muted">Aucun dossier pour ces filtres.</td></tr>';
+    }).join('') || '<tr><td colspan="14" class="muted">' + (s ? 'Aucun dossier à risque pour ce contact.' : 'Aucun dossier pour ces filtres.') + '</td></tr>';
     const waits = q.filter((x) => x.p < 9);
-    $('#q-count').textContent = fmt(shown.length) + ' dossiers affichés sur ' + fmt(q.length) +
-      ' · à appeler : ' + waits.length + ' (priorité 1 : ' + waits.filter((x) => x.p === 1).length + ', priorité 2 : ' + waits.filter((x) => x.p === 2).length + ')';
+    $('#q-count').textContent = (q.length ? (from + 1) + '–' + (from + shown.length) : '0') + ' sur ' + fmt(q.length) + ' dossiers' +
+      (s ? '' : ' · à appeler : ' + waits.length + ' (priorité 1 : ' + waits.filter((x) => x.p === 1).length + ', priorité 2 : ' + waits.filter((x) => x.p === 2).length + ')');
+    renderPager(pages);
+  }
+
+  /** Pagination : Précédent, 1 … 4 5 6 … 12, Suivant. */
+  function renderPager(pages) {
+    const p = state.page;
+    const btn = (label, page, opts) => '<button type="button" data-page="' + page + '"' + (opts || '') + '>' + label + '</button>';
+    let nums = [];
+    for (let i = 1; i <= pages; i++) if (i === 1 || i === pages || Math.abs(i - p) <= 1) nums.push(i);
+    let html = btn('‹ Préc.', p - 1, p === 1 ? ' disabled aria-label="Page précédente"' : ' aria-label="Page précédente"');
+    nums.forEach((n, k) => {
+      if (k && n - nums[k - 1] > 1) html += '<span class="gap" aria-hidden="true">…</span>';
+      html += btn(n, n, (n === p ? ' aria-current="page"' : '') + ' aria-label="Page ' + n + '"');
+    });
+    html += btn('Suiv. ›', p + 1, p === pages ? ' disabled aria-label="Page suivante"' : ' aria-label="Page suivante"');
+    $('#q-pager').innerHTML = pages > 1 ? html : '';
   }
 
   let toastTimer;
@@ -543,8 +601,16 @@
         '<li><b>À appeler</b> = demande d\'appel « Oui », pas encore prise en charge. Tri : ① jeu excessif, ② risque modéré ; puis du plus ancien au plus récent.</li>' +
         '<li>« Non » et « Sans réponse » : visibles avec le filtre <i>Tous les dossiers à risque</i>, jamais appelés.</li>' +
         '<li>Colonne Accomp. : « — » pour le risque modéré (accompagnement non proposé à cette zone).</li>' +
-        '<li>Le numéro n\'est proposé que pour les dossiers à appeler ; « Afficher le n° » l\'affiche et <b>journalise l\'accès</b>.</li>' +
-        '<li>Un dossier pris en charge affiche sa <b>date de prise en charge</b> (pas de calcul de délai).</li></ul>';
+        '<li>Le contact n\'est proposé que pour les dossiers à appeler ou retrouvés par recherche. La colonne E-mail indique « Aucun » ou une adresse masquée (<code>j•••@exemple.test</code>) ; « Afficher le contact » affiche le téléphone et l\'e-mail en entier et <b>journalise l\'accès</b>.</li>' +
+        '<li>Les blocs du tableau de bord sont <b>repliables</b> : seuls les deux premiers et la liste des dossiers sont ouverts au départ, pour alléger l\'écran.</li>' +
+        '<li>Un dossier pris en charge affiche sa <b>date de prise en charge</b> (pas de calcul de délai).</li></ul>' +
+        '<span class="tag">Recherche et pagination</span>' +
+        '<ul><li><b>Recherche par téléphone ou e-mail</b> : usage typique, une personne appelle le 9999 et l\'écoutant retrouve son dossier. La recherche porte sur <b>tous</b> les dossiers à risque, quels que soient la période et les filtres.</li>' +
+        '<li><b>Correspondance exacte</b> uniquement : numéro complet (espaces, indicatif +225 ignorés) ou e-mail complet. Un morceau de numéro ne renvoie rien, pour qu\'on ne puisse pas parcourir les contacts.</li>' +
+        '<li>Un dossier retrouvé « Non » ou « Sans réponse » peut être <b>pris en charge</b> (appel entrant) ; la date est enregistrée.</li>' +
+        '<li>Chaque recherche est <b>journalisée</b> (utilisateur, date, type, nombre de résultats), <b>sans</b> le numéro ni l\'e-mail saisi.</li>' +
+        '<li><b>Pagination</b> : 10, 25 ou 50 dossiers par page ; tout changement de filtre revient à la page 1.</li>' +
+        (exampleContact() ? '<li>Essayez : <code>' + esc(exampleContact().phone) + '</code>' + (exampleContact().email ? ' ou <code>' + esc(exampleContact().email) + '</code>' : '') + ' (données fictives).</li>' : '') + '</ul>';
     return '<h2>③ Tableau de bord</h2>' +
       (myRec() ? '<p class="small"><b>Votre test</b> (dossier ' + myRec().id + ', ' + CATS[myRec().cat].l + ') est compté dans les chiffres' + (myRec().cat >= 2 ? ' ; côté YODAN, filtre <i>Tous les dossiers à risque</i> pour le retrouver' + (myRec().status === 'wait' ? ' (il est aussi dans « À appeler »)' : '') : '') + '.</p>' : '') +
       '<p>Un seul écran pour LONACI et YODAN. Les données sont saisies une fois ; ce qui change selon le profil, c\'est <b>ce qui est caché</b>.</p>' +
@@ -676,10 +742,30 @@
   const platSel = $('#f-plat');
   [...PLATS].sort((a, b) => a[0].localeCompare(b[0])).forEach((p) => platSel.insertAdjacentHTML('beforeend', '<option>' + esc(p[0]) + '</option>'));
 
-  const bind = (sel, key) => $(sel).addEventListener('change', (e) => { state[key] = e.target.value; render(); });
+  const bind = (sel, key) => $(sel).addEventListener('change', (e) => { state[key] = e.target.value; state.page = 1; render(); });
   bind('#f-period', 'period'); bind('#f-zone', 'zone'); bind('#f-sexe', 'sexe'); bind('#f-canal', 'canal'); bind('#f-plat', 'plat'); bind('#q-filter', 'qfilter');
   $('#exp-agg').addEventListener('click', exportAggregates);
   $('#exp-list').addEventListener('click', exportDossiers);
+
+  $('#q-size').addEventListener('change', (e) => { state.size = +e.target.value; state.page = 1; render(); });
+  $('#q-pager').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-page]');
+    if (!b || b.disabled) return;
+    state.page = +b.dataset.page; render();
+    $('#queue').scrollIntoView({ block: 'start' });
+  });
+  $('#q-search').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const parsed = parseSearch($('#q-term').value);
+    const err = $('#q-err');
+    if (parsed.error) { err.textContent = parsed.error; err.hidden = false; $('#q-term').setAttribute('aria-invalid', 'true'); return; }
+    err.hidden = true; $('#q-term').removeAttribute('aria-invalid');
+    state.search = parsed; state.page = 1; render();
+    toast('Recherche journalisée : utilisateur, date, type (' + (parsed.type === 'phone' ? 'téléphone' : 'e-mail') + '), nombre de résultats. Le numéro ou l\'e-mail saisi n\'est pas écrit dans le journal.');
+  });
+  $('#q-clear').addEventListener('click', () => {
+    state.search = null; state.page = 1; $('#q-term').value = ''; $('#q-err').hidden = true; render();
+  });
 
   $('#qtable').addEventListener('click', (e) => {
     const b = e.target.closest('[data-act]');
@@ -687,7 +773,12 @@
     const id = b.dataset.id;
     if (b.dataset.act === 'phone') {
       revealed.add(id); render();
-      toast('Affichage du numéro du dossier ' + id + ' journalisé (utilisateur, date, dossier).');
+      toast('Affichage du contact du dossier ' + id + ' journalisé (utilisateur, date, dossier).');
+    } else if (b.dataset.act === 'take') {
+      const rec = records.find((r) => r.id === id);
+      rec.status = 'done'; rec.pecAt = new Date(TODAY);
+      render(); window.PJR.refreshNotes();
+      toast('Dossier ' + id + ' pris en charge (appel entrant), date enregistrée.');
     } else {
       toast('Maquette : ouvre la fiche d\'appel du dossier ' + id + ' (joint → « Pris en charge », date enregistrée · injoignable → reste « À appeler »).');
     }
@@ -717,6 +808,32 @@
     Object.assign(rec, patch);
     rec.status = statusOf(rec);
   }
+
+  /* ------------------------------------------------------------------
+   * 8. Blocs repliables : seuls les deux premiers et la liste des dossiers sont ouverts au départ
+   * ------------------------------------------------------------------ */
+  const cards = [...document.querySelectorAll('#scr-dash .grid > .card:not(.ghost):not(.queue)')];
+  function setOpen(card, open) {
+    card.classList.toggle('collapsed', !open);
+    card.querySelector('.card-toggle').setAttribute('aria-expanded', String(open));
+  }
+  cards.forEach((card, i) => {
+    const h2 = card.querySelector('h2');
+    const body = document.createElement('div');
+    body.className = 'card-body';
+    body.id = 'card-body-' + i;
+    while (h2.nextSibling) body.appendChild(h2.nextSibling);
+    card.appendChild(body);
+    h2.innerHTML = '<button type="button" class="card-toggle" aria-controls="' + body.id + '">' + h2.innerHTML + '</button>';
+    h2.querySelector('button').addEventListener('click', () => setOpen(card, card.classList.contains('collapsed')));
+    setOpen(card, i < 2);
+  });
+  $('#scr-dash .grid').insertAdjacentHTML('beforebegin',
+    '<div class="fold-all"><button type="button" class="btn-act sec" data-fold="1">Tout déplier</button><button type="button" class="btn-act sec" data-fold="0">Tout replier</button></div>');
+  $('#scr-dash .fold-all').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-fold]');
+    if (b) cards.forEach((c) => setOpen(c, b.dataset.fold === '1'));
+  });
 
   window.PJR.dash = { render, notes: renderNotes, add, update };
 })();

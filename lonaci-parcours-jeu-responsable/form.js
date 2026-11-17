@@ -113,7 +113,7 @@
     const f = S.form;
     const score = S.answers.reduce((s, x) => s + x, 0);
     const profile = { ville: f.ville === OTHER ? f.autreVille : f.ville, commune: f.commune || null, age: +f.age, sexe: f.sexe === 'Homme' ? 'H' : 'F', plat: f.plat, canal: f.canal };
-    const done = { profile, phone: f.phone, answers: S.answers.slice(), score };
+    const done = { profile, phone: f.phone, email: f.email || null, answers: S.answers.slice(), score };
     // Le joueur qui refait le test repart d'un formulaire vide (pas de pré-remplissage : téléphones souvent partagés)
     S.step = 'info'; S.form = emptyForm(); S.errors = {}; S.q = 0; S.answers = [];
     window.PJR.onTestDone(done);
@@ -142,7 +142,7 @@
 
   function fill() {
     if (S.step !== 'info') { S.step = 'info'; }
-    S.form = { phone: '00 00 12 34 56', email: '', ville: 'Abidjan', commune: 'Yopougon', autreVille: '', age: '27', sexe: 'Homme', plat: '1XBET', canal: 'Au point de vente', consent: true };
+    S.form = { phone: '00 00 12 34 56', email: 'joueur.demo@exemple.test', ville: 'Abidjan', commune: 'Yopougon', autreVille: '', age: '27', sexe: 'Homme', plat: '1XBET', canal: 'Au point de vente', consent: true };
     S.errors = {}; render();
   }
 
