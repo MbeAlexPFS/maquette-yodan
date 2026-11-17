@@ -1,0 +1,66 @@
+/* Maquette Lonaci — parcours Jeu responsable : cadre commun (barre de maquette, onglets, appareil, notes).
+   Les styles de chaque écran sont dans form.css, result.css et dash.css (limités à .scr-form, .scr-result, .scr-dash). */
+:root {
+  --brand: #3c210e;
+  --mock: #2a1608;
+  --border: #e5e7eb;
+  --muted: #6b7280;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { font-family: Inter, system-ui, Arial, sans-serif; background: #e9e4df; color: #4d4747; font-size: 15px; line-height: 1.45; }
+button, input, select { font: inherit; color: inherit; }
+[hidden] { display: none !important; }
+:focus-visible { outline: 3px solid #f2a541; outline-offset: 2px; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+/* ---------- Barre de maquette ---------- */
+.mock-bar { position: sticky; top: 0; z-index: 30; display: flex; flex-wrap: wrap; align-items: center; gap: .6rem .9rem; padding: .6rem 1rem; background: var(--mock); color: #fff; }
+.mock-title { font-weight: 800; margin-right: auto; }
+.mock-title span { display: block; font-weight: 500; font-size: .76rem; color: #ffd9a8; }
+.mock-group { display: inline-flex; align-items: center; gap: .4rem; }
+.mock-label { font-size: .8rem; opacity: .8; }
+.seg, .tabs { display: inline-flex; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.25); border-radius: 10px; padding: 2px; }
+.seg button, .tabs button { border: 0; background: none; color: #fff; padding: .28rem .7rem; border-radius: 8px; cursor: pointer; font-size: .85rem; }
+.seg button[aria-pressed="true"], .tabs button[aria-pressed="true"] { background: #fff; color: var(--mock); font-weight: 700; }
+.tabs button { display: inline-flex; align-items: center; gap: .4rem; }
+.tabs i { font-style: normal; display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; border: 1px solid currentColor; font-size: .7rem; font-weight: 700; }
+.mock-btn, .notes-toggle { border: 1px solid rgba(255,255,255,.4); background: none; color: #fff; padding: .32rem .8rem; border-radius: 8px; cursor: pointer; font-size: .85rem; }
+.notes-toggle[aria-pressed="true"] { background: #fff; color: var(--mock); font-weight: 700; }
+
+.layout { display: grid; grid-template-columns: minmax(0, 1fr); }
+.layout.with-notes { grid-template-columns: minmax(0, 1fr) 380px; }
+#stage { padding: 1rem 1.25rem 2rem; min-width: 0; }
+
+/* ---------- Notes UX ---------- */
+.notes { background: #fff; border-left: 1px solid var(--border); padding: 1.1rem 1.2rem 3rem; font-size: .86rem; max-height: calc(100vh - 56px); overflow: auto; position: sticky; top: 56px; }
+.layout:not(.with-notes) .notes { display: none; }
+.notes h2 { font-size: 1.05rem; margin: 0 0 .4rem; font-family: Montserrat, Arial, sans-serif; color: var(--brand); }
+.notes h3 { font-size: .92rem; margin: 1rem 0 .3rem; font-family: Montserrat, Arial, sans-serif; color: var(--brand); }
+.notes .tag { display: block; font-size: .7rem; text-transform: uppercase; letter-spacing: .06em; font-weight: 800; color: var(--muted); margin: 1.1rem 0 .3rem; }
+.notes ul, .notes ol { margin: 0; padding-left: 1.1rem; }
+.notes li { margin-bottom: .35rem; }
+.notes .questions li::marker { color: var(--brand); font-weight: 700; }
+.notes .out li { color: #57504c; }
+.notes code { font-size: .85em; background: #f1ece6; padding: 0 .3em; border-radius: 4px; }
+.notes .tech { margin-top: 1rem; padding: .8rem .9rem; border: 1px solid #e7dccf; background: #fbf7f3; border-radius: 10px; }
+.notes .tech .tag { margin-top: 0; color: #8a5a2e; }
+.notes .muted { color: var(--muted); }
+.notes .small { font-size: .8rem; }
+@media (max-width: 1100px) { .layout.with-notes { grid-template-columns: minmax(0, 1fr); } .notes { position: static; max-height: none; border-left: 0; border-top: 1px solid var(--border); } }
+
+/* ---------- Cadre d'appareil ---------- */
+.frame { background: #f9fafb; overflow: auto; container-type: inline-size; box-shadow: 0 10px 30px rgba(42,22,8,.18); }
+.frame.pc { width: 100%; max-width: 1366px; height: calc(100vh - 100px); min-height: 560px; margin: 0 auto; border-radius: 6px; }
+.frame.mobile { width: 390px; height: 800px; margin: 0 auto; border-radius: 28px; border: 10px solid #1f1f1f; }
+.frame > .scr { min-height: 100%; display: flex; flex-direction: column; background: transparent; }
+.frame > .scr-dash { background: #f7f5f3; }
+.frame > .scr > .site { flex: 1; }
+
+/* ---------- Infobulle + toast ---------- */
+.tip { position: fixed; z-index: 50; pointer-events: none; background: #1f1a17; color: #fff; font-size: .76rem; padding: .4rem .6rem; border-radius: 8px; max-width: 260px; box-shadow: 0 6px 18px rgba(0,0,0,.2); }
+.toast { position: fixed; z-index: 60; left: 50%; bottom: 24px; transform: translateX(-50%); max-width: min(92vw, 640px); background: #1f1a17; color: #fff; padding: .6rem 1rem; border-radius: 10px; font-size: .86rem; box-shadow: 0 8px 24px rgba(0,0,0,.25); }
+
+/* Repère du test passé dans la maquette (file d'appels) */
+.scr-dash tr.mine td { background: #fff8ec; }
+.scr-dash .badge-mine { display: inline-block; margin-left: 6px; font-size: .64rem; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; color: #8a5a00; background: #fff1cc; border: 1px dashed #e0b44a; border-radius: 6px; padding: 0 .35rem; }

@@ -1,0 +1,378 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Maquette — Parcours Jeu responsable (formulaire, résultat, tableau de bord)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Montserrat:wght@600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="shell.css?v=1">
+  <link rel="stylesheet" href="form.css?v=1">
+  <link rel="stylesheet" href="result.css?v=1">
+  <link rel="stylesheet" href="dash.css?v=1">
+</head>
+<body>
+  <header class="mock-bar">
+    <div class="mock-title">Maquette Lonaci — parcours Jeu responsable<span>Maquette — données fictives</span></div>
+
+    <nav class="tabs" aria-label="Écrans de la maquette">
+      <button type="button" data-screen="form" aria-pressed="true"><i>1</i>Formulaire</button>
+      <button type="button" data-screen="result" aria-pressed="false"><i>2</i>Résultat</button>
+      <button type="button" data-screen="dash" aria-pressed="false"><i>3</i>Tableau de bord</button>
+    </nav>
+
+    <button type="button" class="mock-btn" id="mock-fill" data-only="form">Remplir (fictif)</button>
+
+    <div class="mock-group" role="group" aria-label="Zone du résultat" data-only="result">
+      <span class="mock-label">Zone</span>
+      <div class="seg">
+        <button type="button" data-zone="green" aria-pressed="false">Verte</button>
+        <button type="button" data-zone="orange" aria-pressed="false">Orange</button>
+        <button type="button" data-zone="red" aria-pressed="true">Rouge</button>
+      </div>
+    </div>
+
+    <div class="mock-group" role="group" aria-label="Profil connecté" data-only="dash">
+      <span class="mock-label">Vu par</span>
+      <div class="seg">
+        <button type="button" data-role="lonaci" aria-pressed="true">LONACI</button>
+        <button type="button" data-role="yodan" aria-pressed="false">YODAN</button>
+      </div>
+    </div>
+
+    <div class="seg" role="group" aria-label="Affichage">
+      <button type="button" data-device="pc" aria-pressed="true">🖥 PC</button>
+      <button type="button" data-device="mobile" aria-pressed="false">📱 Mobile</button>
+    </div>
+    <button type="button" class="notes-toggle" id="notes-toggle" aria-pressed="true">Notes UX</button>
+  </header>
+
+  <div class="layout with-notes" id="layout">
+    <main id="stage">
+      <div class="frame pc" id="frame">
+
+        <!-- ① Formulaire du test -->
+        <div class="scr scr-form" id="scr-form">
+          <div class="site">
+            <header class="site-head">
+              <img src="logo.jpg" alt="Jouons responsable" class="site-logo">
+              <nav class="site-nav" aria-label="Navigation principale">
+                <a href="#">Accueil</a>
+                <a href="#" class="on">Le test</a>
+              </nav>
+            </header>
+            <main class="page" id="f-page"></main>
+          </div>
+        </div>
+
+        <!-- ② Page résultat -->
+        <div class="scr scr-result" id="scr-result" hidden>
+          <div class="site" id="r-site">
+          <header class="site-head">
+            <img src="logo.jpg" alt="Jouons responsable" class="site-logo">
+            <nav class="site-nav" aria-label="Navigation principale">
+              <a href="#" class="on">Accueil</a>
+              <a href="#">Le test</a>
+            </nav>
+            <button type="button" class="site-burger" aria-label="Menu">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+            </button>
+          </header>
+
+          <main class="result">
+            <!-- Colonne gauche : le résultat -->
+            <section class="card result-card" aria-labelledby="result-title">
+              <div class="result-top">
+                <div class="gauge" id="gauge" role="img" aria-label="">
+                  <div class="gauge-in">
+                    <span class="gauge-emoji" id="gauge-emoji"></span>
+                    <span class="gauge-pct" id="gauge-pct"></span>
+                  </div>
+                </div>
+                <div class="result-id">
+                  <p class="pill">Votre profil</p>
+                  <p class="result-cat">Catégorie ICJE</p>
+                  <h1 id="result-title" class="result-title"></h1>
+                  <p class="score"><b id="score"></b> <span>/ 27 points</span></p>
+                </div>
+              </div>
+
+              <p class="result-msg" id="result-msg"></p>
+
+              <a href="#" class="btn-ghost" id="r-retake">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+                Refaire le test
+              </a>
+            </section>
+
+            <!-- Colonne droite : action puis liens -->
+            <div class="side">
+              <!-- 1) Cases à cocher (zones orange et rouge) -->
+              <section class="card follow" id="follow" aria-labelledby="follow-title">
+                <h2 id="follow-title">Être accompagné(e)</h2>
+                <p class="sub">Vous n'êtes pas seul(e). Un professionnel peut vous contacter, en toute confidentialité.</p>
+
+                <form id="follow-form" novalidate>
+                  <label class="check">
+                    <input type="checkbox" id="cb-call">
+                    <span>
+                      <b>J'accepte d'être rappelé(e)</b>
+                      <small>Appel gratuit et confidentiel, au <span class="ph" id="r-phone">07 00 00 00 00</span>.</small>
+                    </span>
+                  </label>
+
+                  <label class="check" id="support-row">
+                    <input type="checkbox" id="cb-support">
+                    <span>
+                      <b>J'accepte d'être accompagné(e)</b>
+                      <small>J'accepte qu'un professionnel de l'accompagnement me contacte pour me proposer un suivi adapté.</small>
+                    </span>
+                  </label>
+
+                  <div class="actions">
+                    <button type="submit" class="btn-main" id="btn-save">Enregistrer mon choix</button>
+                    <p class="saved" id="saved" hidden role="status"></p>
+                  </div>
+                </form>
+              </section>
+
+              <!-- 2) Liens -->
+              <section class="links" aria-labelledby="links-title">
+                <h2 id="links-title">En savoir plus sur le jeu responsable</h2>
+                <div class="link-grid">
+                  <a href="#" class="tile wa" onclick="return false;">
+                    <span class="tile-ico">
+                      <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm0 18.2a8.2 8.2 0 0 1-4.2-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8-.2-.1-.4-.1-.6.1l-.8 1c-.1.2-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.2-.4.2-.4.7-1.2.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3 3 3 0 0 0-.9 2.2 5.2 5.2 0 0 0 1.1 2.7 11.8 11.8 0 0 0 4.5 4c1.7.7 2.3.8 3.2.6.5-.1 1.5-.6 1.7-1.2.2-.6.2-1.1.1-1.2l-.4-.3z"/></svg>
+                    </span>
+                    <span class="tile-txt">
+                      <b>Chaîne WhatsApp</b>
+                      <small>Inscrivez-vous à la chaîne WhatsApp</small>
+                    </span>
+                  </a>
+                  <a href="#" class="tile tel" onclick="return false;">
+                    <span class="tile-ico">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z"/></svg>
+                    </span>
+                    <span class="tile-txt">
+                      <b>Numéro vert <span class="num">9999</span></b>
+                      <small>Appel gratuit</small>
+                    </span>
+                  </a>
+                </div>
+              </section>
+            </div>
+          </main>
+
+          <!-- Pied de page : le lien « ressources » y est déplacé -->
+          <footer class="site-foot">
+            <span>© 2026 Jouons responsable · <i>Le jeu doit rester un plaisir</i></span>
+            <a href="#" class="foot-link" onclick="return false;">
+              Plus d'informations sur le jeu responsable
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7"/><path d="M8 7h9v9"/></svg>
+            </a>
+          </footer>
+          </div>
+        </div>
+
+        <!-- ③ Tableau de bord LONACI / YODAN -->
+        <div class="scr scr-dash" id="scr-dash" hidden>
+          <div class="site">
+          <header class="site-head">
+            <img src="logo.jpg" alt="Jouons responsable" class="site-logo">
+            <div class="site-title">
+              <b>Tableau de bord</b>
+              <span>Jeu responsable · test ICJE</span>
+            </div>
+            <span class="live" title="Les chiffres se mettent à jour en temps réel"><i></i>En direct</span>
+            <span class="who" id="who"></span>
+          </header>
+
+          <div class="dash">
+            <!-- Filtres : une seule rangée au-dessus des graphiques -->
+            <form class="filters" id="filters" aria-label="Filtres">
+              <label>Période
+                <select id="f-period">
+                  <option value="30">30 derniers jours</option>
+                  <option value="90" selected>90 derniers jours</option>
+                  <option value="all">Depuis le début</option>
+                </select>
+              </label>
+              <label>Zone
+                <select id="f-zone">
+                  <option value="">Toutes</option>
+                  <option value="Abidjan">Abidjan</option>
+                  <option value="Intérieur">Intérieur</option>
+                </select>
+              </label>
+              <label>Sexe
+                <select id="f-sexe">
+                  <option value="">Tous</option>
+                  <option value="H">Hommes</option>
+                  <option value="F">Femmes</option>
+                </select>
+              </label>
+              <label>Canal
+                <select id="f-canal">
+                  <option value="">Tous</option>
+                </select>
+              </label>
+              <label>Plateforme
+                <select id="f-plat">
+                  <option value="">Toutes</option>
+                </select>
+              </label>
+              <p class="unit-note" id="unit-note"></p>
+              <div class="exports">
+                <button type="button" class="btn-exp" id="exp-agg" title="Les indicateurs affichés, avec les filtres en cours, à l'instant du clic">⬇ Exporter les indicateurs (CSV)</button>
+                <button type="button" class="btn-exp" id="exp-list" title="Dossiers à risque, sans numéro de téléphone">⬇ Exporter les dossiers (sans téléphone)</button>
+              </div>
+            </form>
+
+            <!-- Chiffres clés -->
+            <section class="kpis" id="kpis" aria-label="Chiffres clés"></section>
+
+            <div class="grid">
+              <section class="card span-6">
+                <h2>Entonnoir de l'accompagnement</h2>
+                <p class="sub">Du test commencé à la prise en charge par l'équipe YODAN.</p>
+                <div id="funnel"></div>
+              </section>
+
+              <section class="card span-6">
+                <h2>Demande d'appel et accompagnement</h2>
+                <p class="sub">Proposés sur la page résultat : l'appel aux joueurs à risque (modéré, excessif), l'accompagnement au jeu excessif. « Non » et « Sans réponse » ne sont pas rappelés ; la personne reste libre d'appeler le 9999.</p>
+                <div id="consent"></div>
+              </section>
+
+              <section class="card span-6">
+                <h2>Niveaux de risque</h2>
+                <p class="sub">Répartition des tests terminés selon la catégorie ICJE.</p>
+                <div id="risk-bar"></div>
+                <h3>Distribution du score (0–27)</h3>
+                <div id="histo"></div>
+              </section>
+
+              <section class="card span-6">
+                <h2>Suivi des dossiers</h2>
+                <p class="sub">Les tests en zone verte sont <b>clos</b> : aucune action, comptés à part. Seuls les dossiers à risque demandent un suivi.</p>
+                <div id="pec"></div>
+              </section>
+
+              <section class="card span-12">
+                <h2>Évolution par semaine</h2>
+                <p class="sub">Tests terminés par semaine, par niveau de risque.</p>
+                <div id="weekly"></div>
+              </section>
+
+              <section class="card span-6">
+                <h2>Âge × niveau de risque</h2>
+                <p class="sub">Part de chaque niveau dans la tranche d'âge (ligne = 100 %).</p>
+                <div id="heat-age"></div>
+              </section>
+
+              <section class="card span-6">
+                <h2>Sexe, zone et canal</h2>
+                <p class="sub">Niveau de risque selon le profil et la source d'acquisition.</p>
+                <div id="profile"></div>
+              </section>
+
+              <section class="card span-12">
+                <h2>Villes et communes</h2>
+                <p class="sub">Nombre de tests et part de joueurs à risque (modéré + excessif). À Abidjan, la commune est saisie à la place de la ville.</p>
+                <div id="cities"></div>
+              </section>
+
+              <section class="card span-12">
+                <h2>Plateformes citées</h2>
+                <p class="sub">Nombre de tests et part de joueurs à risque (modéré + excessif).</p>
+                <div id="plats"></div>
+              </section>
+
+              <section class="card span-6">
+                <h2>Ce que disent les réponses</h2>
+                <p class="sub">Part des tests ayant répondu « La plupart du temps » ou « Presque toujours ».</p>
+                <div id="items"></div>
+              </section>
+
+              <section class="card span-6">
+                <h2>Complétion du test</h2>
+                <p class="sub">Tests terminés ÷ tests commencés (étape « Informations » validée, questions non envoyées).</p>
+                <div id="completion"></div>
+              </section>
+
+              <section class="card span-12">
+                <h2>Équité d'accès</h2>
+                <p class="sub">Part des demandes d'appel prises en charge, par groupe. Le trait vertical = moyenne générale.</p>
+                <div id="equity"></div>
+              </section>
+
+              <!-- Dossiers : YODAN uniquement -->
+              <section class="card span-12 queue" id="queue" aria-labelledby="queue-title">
+                <div class="queue-head">
+                  <div>
+                    <h2 id="queue-title">Dossiers à risque <span class="badge-yodan">YODAN uniquement</span></h2>
+                    <p class="sub">On n'appelle que les personnes qui ont demandé un appel. Le numéro s'affiche à la demande et chaque affichage est journalisé.</p>
+                  </div>
+                  <div class="queue-tools">
+                    <label class="mini">Afficher
+                      <select id="q-filter">
+                        <option value="todo">À appeler (demande = Oui, en attente)</option>
+                        <option value="all">Tous les dossiers à risque</option>
+                      </select>
+                    </label>
+                  </div>
+                </div>
+                <div class="table-wrap">
+                  <table class="qtable" id="qtable">
+                    <thead>
+                      <tr>
+                        <th scope="col">Priorité</th>
+                        <th scope="col">Dossier</th>
+                        <th scope="col">Contact</th>
+                        <th scope="col">Date du test</th>
+                        <th scope="col">Ancienneté</th>
+                        <th scope="col">Commune / ville</th>
+                        <th scope="col">Âge · sexe</th>
+                        <th scope="col">Plateforme</th>
+                        <th scope="col">Score</th>
+                        <th scope="col">Canal</th>
+                        <th scope="col">Appel</th>
+                        <th scope="col">Accomp.</th>
+                        <th scope="col">Statut / action</th>
+                      </tr>
+                    </thead>
+                    <tbody></tbody>
+                  </table>
+                </div>
+                <p class="small muted" id="q-count"></p>
+              </section>
+
+              <!-- Repère de maquette : ce que LONACI ne voit pas -->
+              <section class="card span-12 ghost" id="ghost" aria-hidden="true">
+                <b>Repère maquette</b> — à cet endroit, YODAN voit la <b>liste nominative des dossiers à risque</b> (téléphone, dossier, score individuel).
+                Côté LONACI, cette zone n'existe pas : rien n'est chargé, ni à l'écran ni dans les données envoyées au navigateur.
+              </section>
+            </div>
+
+            <p class="foot small muted">Unité : <b>tests</b>, pas personnes (un même joueur peut refaire le test après 30 jours). Seul le test ICJE est pris en compte.</p>
+          </div>
+          </div>
+        </div>
+
+      </div>
+    </main>
+
+    <aside class="notes" id="notes" aria-label="Notes UX"></aside>
+  </div>
+
+  <div class="tip" id="tip" role="tooltip" hidden></div>
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+  <script src="app.js?v=1"></script>
+  <script src="form.js?v=1"></script>
+  <script src="result.js?v=1"></script>
+  <script src="dash.js?v=1"></script>
+  <script>PJR.boot();</script>
+</body>
+</html>
