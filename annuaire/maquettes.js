@@ -41,6 +41,16 @@ window.MAQUETTES = [
     description: "Accès par QR code puis vérification d'identité par code à usage unique (OTP) envoyé par e-mail. Envois et exports simulés.",
     ecrans: ["QR code", "Vérification OTP"],
     maj: "2026-11-15",
+    remplacePar: "bspa-particuliers-campagnes-multi-entreprises",
+  },
+  {
+    dossier: "bspa-particuliers-campagnes-multi-entreprises",
+    projet: "bspa-particuliers",
+    titre: "Campagnes multi-entreprises",
+    description: "Plusieurs entreprises clientes : création de campagne (nom, entreprise, période) et envoi du lien (adresses collées ou import CSV), formulaire avec message hors période, vue médecin Yodan non censurée filtrée par entreprise / campagne / patient avec la liste des participants, tableau de bord RH agrégé. Tests de cohérence inclus (?tests=1).",
+    ecrans: ["Campagnes", "Tableau de bord & participants", "Rapport médecin", "Tableau de bord RH", "Formulaire", "Bilan fermé", "E-mail + rapport"],
+    roles: ["Médecin Yodan", "RH", "Participant"],
+    maj: "2026-11-17",
   },
   {
     dossier: "yodan-atmp-cnps-graphes-admin",
