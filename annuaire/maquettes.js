@@ -18,13 +18,31 @@ window.PROJETS = {
 
 window.MAQUETTES = [
   {
+    dossier: "yodan-business-partenaires-simplifie",
+    projet: "yodan-business",
+    titre: "LAMIFI Business — partenaires (version simplifiée)",
+    description: "Dérivée de « partenaires par type » : types Entreprise et Association / mutuelle seulement, création de partenaire en un écran court, seul réglage = inclure une fonctionnalité d'un rôle dans un autre. Pas de prise en charge dans l'app : l'admin Yodan exporte la liste des personnes à prendre en charge (CSV) et passe le dossier à « Clos » quand le traitement est fini. Superviseur secondaire (ex-adjoint). Tests de cohérence inclus (?tests=1).",
+    ecrans: ["Connexion", "Partenaires", "Créer un partenaire", "Rôles (inclusions)", "Tableau de bord par test", "Campagnes", "Validation", "Suivi des agences", "Comptes", "À prendre en charge (export, clôture)", "Participant"],
+    roles: ["Admin LAMIFI Business", "Admin Yodan", "Administrateur", "Superviseur principal", "Superviseur secondaire", "Validateur", "Participant"],
+    maj: "2026-11-19",
+  },
+  {
+    dossier: "yodan-business-partenaires-types",
+    projet: "yodan-business",
+    titre: "LAMIFI Business — partenaires par type",
+    description: "Fusion modulaire des maquettes CNPS (LAMIFI v2, graphes ATMP v2), Jouons responsable (Lonaci) et BSPA : création de partenaire par type ou personnalisée (rôles, fonctionnalités héritées, tests, campagne, bon / budget), évaluation guidée avec blocages et QR, validation, suivi des agences, un tableau de bord par test (PCL-5, ICJE, BSPA…), campagnes e-mail pro + code, Admin Yodan (vue complète, patients, attestation), Console, praticien, parcours publics. Connexion commune, barre de démo horloge + e-mails. Tests de cohérence inclus (?tests=1).",
+    ecrans: ["Connexion", "Partenaires et réglages", "Créer un partenaire", "Évaluation (agent, QR)", "Validation", "Suivi des agences", "Tableau de bord par test", "Campagnes", "Comptes et agences", "Patients", "Console", "Praticien", "Patient / joueur / participant"],
+    roles: ["Admin LAMIFI Business", "Admin Yodan", "Console", "Praticien", "Administrateur", "Superviseur principal", "Superviseur adjoint", "Validateur", "Évaluateur", "Patient / participant"],
+    maj: "2026-11-18",
+  },
+  {
     dossier: "lonaci-parcours-jeu-responsable",
     projet: "lonaci",
     titre: "Parcours Jeu responsable",
-    description: "Test ICJE côté joueur, page de résultat, puis tableau de bord Lonaci / YODAN avec recherche et pagination des dossiers.",
-    ecrans: ["Formulaire", "Résultat", "Tableau de bord"],
+    description: "Test ICJE côté joueur, page de résultat, puis tableau de bord Lonaci / YODAN avec recherche et pagination des dossiers, fiche d'appel (validée / injoignable / refusée avec motif), historique des accès et journaux internes (YODAN).",
+    ecrans: ["Formulaire", "Résultat", "Tableau de bord", "Historique et journaux internes"],
     roles: ["Joueur", "Lonaci", "YODAN"],
-    maj: "2026-11-17",
+    maj: "2026-11-19",
   },
   {
     dossier: "yodan-business-refonte-ux-v2",

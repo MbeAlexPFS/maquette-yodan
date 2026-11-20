@@ -179,3 +179,38 @@
 .scr-dash .qtable td::before { content: attr(data-l); flex: none; font-size: .72rem; color: var(--muted); font-weight: 600; }
 .scr-dash .qtable td > span, .scr-dash .qtable td > b { text-align: right; }
 }
+
+/* Historique et journaux internes (YODAN) */
+.scr-dash .htabs { display: inline-flex; gap: 4px; padding: 3px; background: var(--bg); border: 1px solid var(--border); border-radius: 10px; }
+.scr-dash .htabs button { border: 0; background: none; padding: .38rem .8rem; border-radius: 8px; font-size: .8rem; font-weight: 600; color: var(--text-2); cursor: pointer; }
+.scr-dash .htabs button[aria-pressed="true"] { background: #fff; color: var(--brand); box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+.scr-dash .hist-filters { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px 10px; margin-bottom: 10px; }
+.scr-dash .hist-filters .mini select { min-width: 130px; }
+.scr-dash .hist-filters .q-input { padding: .42rem .6rem; border: 1px solid var(--border); border-radius: 9px; font: inherit; font-size: .85rem; font-weight: 500; }
+.scr-dash .hist-count { margin: 0 0 6px auto; }
+.scr-dash .history .qtable code { font-size: .7rem; }
+.scr-dash .history .qtable td { white-space: normal; }
+.scr-dash .history .qtable td:first-child { white-space: nowrap; }
+.scr-dash .log-view { margin: 10px 0 0; max-height: 320px; overflow: auto; padding: 10px; background: #1d1a18; color: #e9e4df; border-radius: 10px; font-size: .72rem; line-height: 1.5; white-space: pre; }
+
+/* Issues d'appel */
+.scr-dash .stat-refus { color: #c2410c; font-weight: 600; }
+.scr-dash .tries { display: block; margin-top: 3px; font-size: .7rem; color: var(--muted); }
+/* Fiche d'appel (fenêtre modale native <dialog>) */
+.call-dlg { width: min(480px, calc(100vw - 32px)); border: 0; border-radius: 16px; padding: 20px; box-shadow: 0 20px 50px rgba(0,0,0,.25); color: var(--text); }
+.call-dlg::backdrop { background: rgba(28, 18, 10, .45); }
+.call-dlg h2 { margin: 0 0 4px; font-family: Montserrat, Arial, sans-serif; font-size: 1.1rem; color: var(--brand); }
+.call-dlg #call-who { margin: 0 0 14px; }
+.call-dlg fieldset { border: 0; margin: 0; padding: 0; display: grid; gap: 8px; }
+.call-dlg .opt { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--border); border-radius: 12px; cursor: pointer; }
+.call-dlg .opt:has(input:checked) { border-color: var(--brand); background: #faf6f2; }
+.call-dlg .opt input { margin-top: 3px; accent-color: #3c210e; }
+.call-dlg .opt small { display: block; font-size: .78rem; color: var(--muted); margin-top: 2px; }
+.call-dlg .motif { display: flex; flex-direction: column; gap: 4px; margin-top: 12px; font-size: .8rem; font-weight: 600; color: var(--text-2); }
+.call-dlg .motif select { padding: .5rem .6rem; border: 1px solid var(--border); border-radius: 9px; font: inherit; font-weight: 500; }
+.call-dlg .call-err { margin: 10px 0 0; font-size: .8rem; color: #b91c1c; }
+.call-dlg .dlg-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+.call-dlg .dlg-actions button { border-radius: 9px; padding: .55rem 1rem; font: inherit; font-size: .85rem; font-weight: 700; cursor: pointer; }
+.call-dlg .btn-main { border: 0; background: var(--brand); color: #fff; }
+.call-dlg .btn-sec { border: 1px solid var(--brand); background: #fff; color: var(--brand); }
+.call-dlg :focus-visible { outline: 2px solid #2a78d6; outline-offset: 2px; }

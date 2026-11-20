@@ -16,6 +16,12 @@
     };
   }
   const R = prng(20261117);
+  /** Second générateur pour les issues d'appel : n'altère pas les autres données fictives. */
+  const R2 = prng(4242);
+  /** Motifs de refus : liste fermée, pas de texte libre (minimisation, aucune donnée de santé saisie). */
+  const REFUS_MOTIFS = ['Ne souhaite pas être accompagné', 'Déjà suivi ailleurs', 'Ne se sent pas concerné', 'Ne veut plus être contacté', 'Autre motif'];
+  /** Ramène un instant en heures ouvrées (9 h – 16 h 59) le même jour. */
+  const workTime = (ms) => { const d = new Date(ms); return d.getHours() >= 9 && d.getHours() < 17 ? d : new Date(d.getFullYear(), d.getMonth(), d.getDate(), 9 + Math.floor(R2() * 8), Math.floor(R2() * 60)); };
   const pick = (list) => {
     const tot = list.reduce((s, x) => s + x[1], 0);
     let r = R() * tot;
@@ -110,7 +116,9 @@
        clos  = zone verte, aucune action ;
        wait  = a demandé un appel, pas encore pris en charge ;
        done  = pris en charge (date enregistrée) ;
-       none  = à risque sans demande d'appel (Non / Sans réponse) : pas d'appel sortant. */
+       refus = joint, mais refuse la prise en charge (date + motif) ;
+       none  = à risque sans demande d'appel (Non / Sans réponse) : pas d'appel sortant.
+       attempts = appels « injoignable » (dates) : le dossier reste « wait » tant qu'il n'y a pas d'issue. */
     let status = 'clos', pecAt = null;
     if (cat >= 2) {
       if (callback === 'Oui' || support === 'Oui') {
@@ -123,9 +131,18 @@
       }
       if (status === 'done') pecAt = new Date(+date + Math.min(daysAgo, expo(2) + .1) * DAY);
     }
+    // Issues d'appel dérivées du statut : tentatives toujours entre la date du test et l'issue (ou maintenant)
+    const attempts = [];
+    let refusAt = null, refusMotif = null;
+    if (cat >= 2 && (callback === 'Oui' || support === 'Oui')) {
+      const end = status === 'done' ? +pecAt : +TODAY;
+      const nTry = status === 'done' ? (R2() < .25 ? 1 : 0) : (daysAgo >= 1 && R2() < .45 ? 1 + Math.floor(R2() * 2) : 0);
+      for (let t = 1; t <= nTry; t++) { const at = workTime(+date + (end - date) * t / (nTry + 1)); if (+at > +date && +at < end && (!attempts.length || +at > +attempts[attempts.length - 1])) attempts.push(at); }
+      if (status === 'done' && R2() < .1) { status = 'refus'; refusAt = pecAt; pecAt = null; refusMotif = REFUS_MOTIFS[Math.floor(R2() * 4)]; }
+    }
 
     records.push(Object.assign(base, {
-      completed: true, score, cat, answers, callback, support, status, pecAt,
+      completed: true, score, cat, answers, callback, support, status, pecAt, attempts, refusAt, refusMotif,
       phone: '00 00 ' + d2() + ' ' + d2() + ' ' + d2(), // numéro volontairement invalide (fictif)
       email: R() < .35 ? 'joueur' + (10241 + i) + '@exemple.test' : null, // e-mail facultatif, domaine fictif
     }));
@@ -215,6 +232,8 @@
     if (!isL()) renderQueue(risk);
     $('#unit-note').innerHTML = isL() ? 'Agrégats anonymes · groupes de 0 à 4 tests masqués' : 'Vue clinique · effectifs non masqués';
     $('#exp-list').hidden = isL();
+    $('#history').hidden = isL();
+    if (!isL() && window.PJR.journal) window.PJR.journal.render();
   }
 
   function renderWho() {
@@ -302,17 +321,18 @@
     $('#histo').innerHTML = svg + (isL() ? '<p class="small muted" style="margin:4px 0 0">Scores 20 à 27 regroupés ; barres hachurées = moins de 5 tests (hauteur plafonnée au seuil).</p>' : '');
   }
 
-  const PEC_LABELS = ['Pris en charge', 'En attente d\'appel', 'Sans demande · Non', 'Sans demande · Sans réponse'];
+  const PEC_LABELS = ['Pris en charge', 'En attente d\'appel', 'Prise en charge refusée', 'Sans demande · Non', 'Sans demande · Sans réponse'];
   const pecCounts = (risk) => [
     risk.filter((r) => r.status === 'done').length,
     risk.filter((r) => r.status === 'wait').length,
+    risk.filter((r) => r.status === 'refus').length,
     risk.filter((r) => r.status === 'none' && r.callback === 'Non').length,
     risk.filter((r) => r.status === 'none' && r.callback === 'Sans réponse').length,
   ];
   function renderPec(rs, risk) {
     const clos = rs.filter((r) => r.status === 'clos').length;
     const labels = PEC_LABELS;
-    const cols = ['#2a78d6', '#eda100', '#8a837d', '#d6d1cc'];
+    const cols = ['#2a78d6', '#eda100', '#c2410c', '#8a837d', '#d6d1cc'];
     const counts = pecCounts(risk);
     const mk = small(sum(counts)) ? counts.map(() => 1) : suppress(counts);
     const total = sum(counts) || 1;
@@ -334,7 +354,7 @@
       '<div class="closed"><span class="lock" aria-hidden="true">✓</span><div><b>' + nTxt(clos) + '</b> tests <b style="font-size:inherit;font-family:inherit">clos</b> — zone verte (sans risque, faible risque), aucune action. ' + pTxt(rate(clos, rs.length)) + ' des tests terminés.</div></div>' +
       '<p class="sec-title">Dossiers à risque (' + nTxt(risk.length) + ') — nécessitent un suivi</p>' +
       '<div class="pec">' + svg + '<div class="pec-figs">' + labels.map((_, i) => fig(i)).join('') + '</div></div>' +
-      '<p class="small muted" style="margin:10px 0 0">Sans demande (« Non » ou « Sans réponse ») : pas d\'appel sortant. Si la personne appelle elle-même le 9999, l\'écoutant retrouve son dossier par recherche et le prend en charge.</p>';
+      '<p class="small muted" style="margin:10px 0 0">Refusée : personne jointe qui ne souhaite pas être accompagnée. Sans demande (« Non » ou « Sans réponse ») : pas d\'appel sortant. Si la personne appelle elle-même le 9999, l\'écoutant retrouve son dossier par recherche et le prend en charge.</p>';
   }
 
   function renderWeekly(rs) {
@@ -537,10 +557,13 @@
     if (s) $('#q-banner').textContent = (q.length ? q.length + ' dossier' + (q.length > 1 ? 's' : '') + ' trouvé' + (q.length > 1 ? 's' : '') : 'Aucun dossier à risque trouvé') +
       ' pour ' + (s.type === 'phone' ? 'ce numéro' : 'cet e-mail') + ' (toutes périodes, filtres du tableau de bord ignorés).';
     const chip = (v) => (v === 'Oui' ? '<span class="chip oui">Oui</span>' : v === 'Non' ? '<span class="chip">Non</span>' : v === 'Sans réponse' ? '<span class="chip sr">Sans réponse</span>' : '<span class="muted" title="Non proposé pour cette zone">—</span>');
+    const tries = (r) => { const a = r.attempts || []; return a.length ? '<span class="tries" data-tip="' + esc('Appels sans réponse : ' + a.map(shortDate).join(', ')) + '">Injoignable ×' + a.length + ' · ' + shortDate(a[a.length - 1]) + '</span>' : ''; };
     const statusCell = (r) => (r.status === 'wait'
-      ? '<button type="button" class="btn-act" data-act="call" data-id="' + r.id + '">Appeler</button>'
+      ? '<button type="button" class="btn-act" data-act="call" data-id="' + r.id + '">Appeler</button>' + tries(r)
       : r.status === 'done'
         ? '<span class="stat-done">' + pecLabel(r) + '</span>'
+      : r.status === 'refus'
+        ? '<span class="stat-refus" data-tip="' + esc('Motif : ' + r.refusMotif) + '">Refusée le ' + shortDate(r.refusAt) + '</span><span class="tries">' + esc(r.refusMotif) + '</span>'
         : s // trouvé par recherche = le joueur appelle lui-même (9999) : on peut le prendre en charge
           ? '<button type="button" class="btn-act sec" data-act="take" data-id="' + r.id + '" data-tip="' + esc('La personne a appelé le 9999 (demande d\'appel : ' + r.callback + ')') + '">Prendre en charge</button>'
           : '<span class="btn-act none">' + r.callback + ' · pas d\'appel</span>');
@@ -550,7 +573,7 @@
       // Contact accessible : dossier à appeler, dossier pris en charge (suivi), ou retrouvé par recherche
       const eligible = r.status === 'wait' || r.status === 'done' || !!s;
       const shownC = eligible && revealed.has(r.id);
-      const phone = !eligible ? '<span class="muted" data-tip="Aucune demande de contact : pas d\'appel sortant">Pas de demande</span>'
+      const phone = !eligible ? (r.status === 'refus' ? '<span class="muted" data-tip="Prise en charge refusée : contact plus nécessaire">Masqué (refus)</span>' : '<span class="muted" data-tip="Aucune demande de contact : pas d\'appel sortant">Pas de demande</span>')
         : shownC ? '<span class="phone-num">' + esc(r.phone) + '</span>'
           : '<button type="button" class="btn-phone" data-act="phone" data-id="' + r.id + '">Afficher le contact</button>';
       // E-mail : « aucun » s'il n'a pas été saisi ; masqué tant que le contact n'est pas affiché (affichage journalisé)
@@ -613,7 +636,7 @@
         '<li>La liste des dossiers n\'existe pas pour ce profil (le cadre hachuré n\'est qu\'un repère de maquette).</li>' +
         '<li>Essayez : <i>Période = 30 jours</i> + <i>Sexe = Femmes</i> + <i>Plateforme = BETWINNER</i> pour voir le masquage.</li></ul>'
       : '<ul><li>Mêmes blocs que LONACI, <b>sans masquage</b> (besoin clinique), plus la <b>liste des dossiers à risque</b> en bas de page.</li>' +
-        '<li><b>À appeler</b> = demande de contact (appel <b>ou</b> accompagnement = « Oui »), pas encore prise en charge. Tri : ① jeu excessif, ② risque modéré ; puis du plus ancien au plus récent. « Appeler » simule ici un appel abouti.</li>' +
+        '<li><b>À appeler</b> = demande de contact (appel <b>ou</b> accompagnement = « Oui »), pas encore prise en charge. Tri : ① jeu excessif, ② risque modéré ; puis du plus ancien au plus récent. « Appeler » ouvre la <b>fiche d\'appel</b> : prise en charge validée, injoignable (le dossier reste « À appeler », la tentative est comptée et datée) ou prise en charge refusée (motif obligatoire, choisi dans une liste fermée : pas de texte libre).</li>' +
         '<li>Sans demande (« Non » ou « Sans réponse ») : visibles avec le filtre <i>Tous les dossiers à risque</i>, jamais appelés, contact non affiché (« Pas de demande »).</li>' +
         '<li>Un dossier <b>pris en charge</b> affiche seulement sa date (pas de motif : c\'est un appel, qu\'il soit passé ou reçu). Son contact reste accessible pour le suivi.</li>' +
         '<li><b>Accompagnement « Oui »</b> sans demande d\'appel : le dossier est aussi « À appeler » ; la page résultat prévient la personne qu\'elle sera appelée.</li>' +
@@ -726,16 +749,18 @@
     ageGroups().forEach((g) => eq('Âge ' + g[0], (r) => ageGroup(r.age), g[0]));
     CANAUX.forEach((c) => eq('Canal ' + c[0], (r) => r.canal, c[0]));
 
+    window.PJR.log && window.PJR.log('export.aggregates', { details: { periode: state.period === 'all' ? 'depuis le début' : state.period + ' jours' } });
     download('indicateurs', [['Bloc', 'Indicateur', 'Groupe', 'Valeur']].concat(rows));
   }
 
   function exportDossiers() {
     if (isL()) return; // n'existe pas côté LONACI
     const risk = started().filter((r) => r.completed && atRisk(r));
-    const head = ['Dossier', 'Date du test', 'Commune / ville', 'Zone', 'Âge', 'Sexe', 'Plateforme', 'Score', 'Catégorie', 'Canal', 'Demande d\'appel', 'Accompagnement', 'Statut', 'Pris en charge le'];
-    const label = { done: 'Pris en charge', wait: 'En attente d\'appel', none: 'Sans demande' };
+    const head = ['Dossier', 'Date du test', 'Commune / ville', 'Zone', 'Âge', 'Sexe', 'Plateforme', 'Score', 'Catégorie', 'Canal', 'Demande d\'appel', 'Accompagnement', 'Statut', 'Pris en charge le', 'Appels sans réponse', 'Refusée le', 'Motif du refus'];
+    const label = { done: 'Pris en charge', wait: 'En attente d\'appel', refus: 'Prise en charge refusée', none: 'Sans demande' };
     const rows = risk.map((r) => [r.id, r.date.toLocaleString('fr-FR'), r.city, r.zone, r.age, r.sexe, r.plat, r.score, CATS[r.cat].l, r.canal,
-      r.callback, r.support === '-' ? '-' : r.support, label[r.status], r.pecAt ? shortDate(r.pecAt) : '']);
+      r.callback, r.support === '-' ? '-' : r.support, label[r.status], r.pecAt ? shortDate(r.pecAt) : '', (r.attempts || []).length, r.refusAt ? shortDate(r.refusAt) : '', r.refusMotif || '']);
+    window.PJR.log && window.PJR.log('export.list', { details: { lignes: rows.length, telephone: 'non inclus' } });
     download('dossiers-a-risque', [head].concat(rows)); // jamais de colonne téléphone
   }
 
@@ -749,7 +774,7 @@
     a.download = 'jeu-responsable-' + name + '-' + (isL() ? 'lonaci' : 'yodan') + '.csv';
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-    toast('Export généré à l\'instant (données en temps réel). Export journalisé : utilisateur, date, filtres.');
+    toast('Export généré à l\'instant (données en temps réel).' + (isL() ? '' : ' Export journalisé : date, filtres.'));
   }
 
   /* ------------------------------------------------------------------
@@ -778,7 +803,9 @@
     const err = $('#q-err');
     if (parsed.error) { err.textContent = parsed.error; err.hidden = false; $('#q-term').setAttribute('aria-invalid', 'true'); return; }
     err.hidden = true; $('#q-term').removeAttribute('aria-invalid');
-    state.search = parsed; state.page = 1; render();
+    state.search = parsed; state.page = 1;
+    window.PJR.log && window.PJR.log('contact.search', { details: { type: parsed.type === 'phone' ? 'téléphone' : 'e-mail', resultats: records.filter((r) => r.completed && atRisk(r) && matches(r, parsed)).length } });
+    render();
     toast('Recherche journalisée : utilisateur, date, type (' + (parsed.type === 'phone' ? 'téléphone' : 'e-mail') + '), nombre de résultats. Le numéro ou l\'e-mail saisi n\'est pas écrit dans le journal.');
   });
   $('#q-clear').addEventListener('click', () => {
@@ -790,20 +817,61 @@
     if (!b) return;
     const id = b.dataset.id;
     if (b.dataset.act === 'phone') {
-      revealed.add(id); render();
-      toast('Affichage du contact du dossier ' + id + ' journalisé (utilisateur, date, dossier).');
+      revealed.add(id);
+      window.PJR.log && window.PJR.log('contact.view', { dossier: id });
+      render();
+      toast('Affichage du contact du dossier ' + id + ' journalisé (date, dossier).');
     } else if (b.dataset.act === 'take') {
       const rec = records.find((r) => r.id === id);
       rec.status = 'done'; rec.pecAt = new Date(TODAY);
+      window.PJR.log && window.PJR.log('care.take', { dossier: id, details: { origine: 'Appel reçu (9999)' } });
       render(); window.PJR.refreshNotes();
       toast('Dossier ' + id + ' pris en charge, date enregistrée.');
     } else {
-      // Maquette : on simule un appel abouti (en vrai, la fiche d'appel propose « joint » ou « injoignable »)
-      const rec = records.find((r) => r.id === id);
-      rec.status = 'done'; rec.pecAt = new Date(TODAY);
-      render(); window.PJR.refreshNotes();
-      toast('Maquette : appel abouti, dossier ' + id + ' pris en charge (date enregistrée). Si injoignable, il resterait « À appeler ».');
+      openCall(id);
     }
+  });
+
+  /* Fiche d'appel : issue obligatoire ; motif obligatoire (liste fermée) en cas de refus. */
+  const dlg = $('#call-dlg');
+  const callForm = $('#call-form');
+  REFUS_MOTIFS.forEach((m) => $('#call-motif').insertAdjacentHTML('beforeend', '<option>' + esc(m) + '</option>'));
+  function openCall(id) {
+    const r = records.find((x) => x.id === id);
+    if (!revealed.has(id)) { revealed.add(id); window.PJR.log && window.PJR.log('contact.view', { dossier: id }); }
+    dlg.dataset.id = id;
+    const n = (r.attempts || []).length;
+    $('#call-who').innerHTML = 'Dossier <b>' + id + '</b> · <span class="phone-num">' + esc(r.phone) + '</span>' + (n ? '<br><span class="muted">Déjà ' + n + ' appel' + (n > 1 ? 's' : '') + ' sans réponse (dernier le ' + shortDate(r.attempts[n - 1]) + ').</span>' : '');
+    callForm.reset(); $('#call-motif-wrap').hidden = true; $('#call-err').hidden = true;
+    render();
+    if (dlg.showModal) dlg.showModal(); else dlg.setAttribute('open', '');
+  }
+  const closeCall = () => { if (dlg.close) dlg.close(); else dlg.removeAttribute('open'); };
+  callForm.addEventListener('change', () => { const v = callForm.elements.issue.value; $('#call-motif-wrap').hidden = v !== 'refus'; });
+  $('#call-cancel').addEventListener('click', closeCall);
+  callForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const issue = callForm.elements.issue.value, motif = $('#call-motif').value;
+    const err = $('#call-err');
+    if (!issue) { err.textContent = 'Choisissez le résultat de l\'appel.'; err.hidden = false; return; }
+    if (issue === 'refus' && !motif) { err.textContent = 'Choisissez le motif du refus.'; err.hidden = false; $('#call-motif').focus(); return; }
+    const id = dlg.dataset.id, rec = records.find((r) => r.id === id);
+    const log = window.PJR.log || (() => {});
+    let msg;
+    if (issue === 'done') {
+      rec.status = 'done'; rec.pecAt = new Date(TODAY);
+      log('care.call', { dossier: id, details: { issue: 'Prise en charge validée' } });
+      msg = 'Dossier ' + id + ' : prise en charge validée (date enregistrée).';
+    } else if (issue === 'injoignable') {
+      rec.attempts = (rec.attempts || []).concat(new Date(TODAY));
+      log('care.unreachable', { dossier: id, details: { tentative: rec.attempts.length } });
+      msg = 'Dossier ' + id + ' : injoignable (tentative ' + rec.attempts.length + '). Il reste dans « À appeler ».';
+    } else {
+      rec.status = 'refus'; rec.refusAt = new Date(TODAY); rec.refusMotif = motif;
+      log('care.refused', { dossier: id });
+      msg = 'Dossier ' + id + ' : prise en charge refusée (' + motif + ').';
+    }
+    closeCall(); render(); window.PJR.refreshNotes(); toast(msg);
   });
 
   /* ------------------------------------------------------------------
@@ -811,7 +879,7 @@
    * ------------------------------------------------------------------ */
   let myId = null;
   const myRec = () => records.find((r) => r.id === myId);
-  const statusOf = (r) => (r.status === 'done' ? 'done' : r.cat < 2 ? 'clos' : asked(r) ? 'wait' : 'none');
+  const statusOf = (r) => (r.status === 'done' || r.status === 'refus' ? r.status : r.cat < 2 ? 'clos' : asked(r) ? 'wait' : 'none');
 
   /** Étape 1 validée (« Suivant ») : test « commencé », profil seul, SANS téléphone ni e-mail.
    *  Si le joueur revient à l'étape 1 puis repart, c'est le même test (pas de doublon). */
@@ -828,7 +896,7 @@
   /** Questions envoyées : le MÊME dossier passe à « terminé » (score, téléphone, e-mail). */
   function complete(id, t) {
     const rec = records.find((r) => r.id === id);
-    Object.assign(rec, t, { completed: true, status: null, pecAt: null });
+    Object.assign(rec, t, { completed: true, status: null, pecAt: null, attempts: [], refusAt: null, refusMotif: null });
     rec.status = statusOf(rec);
     return rec;
   }
@@ -843,7 +911,7 @@
   /* ------------------------------------------------------------------
    * 8. Blocs repliables : seuls les deux premiers et la liste des dossiers sont ouverts au départ
    * ------------------------------------------------------------------ */
-  const cards = [...document.querySelectorAll('#scr-dash .grid > .card:not(.ghost):not(.queue)')];
+  const cards = [...document.querySelectorAll('#scr-dash .grid > .card:not(.ghost):not(.queue):not(.history)')];
   function setOpen(card, open) {
     card.classList.toggle('collapsed', !open);
     card.querySelector('.card-toggle').setAttribute('aria-expanded', String(open));
@@ -866,5 +934,5 @@
     if (b) cards.forEach((c) => setOpen(c, b.dataset.fold === '1'));
   });
 
-  window.PJR.dash = { render, notes: renderNotes, start, complete, update, data: records }; // data : lecture pour les contrôles de cohérence
+  window.PJR.dash = { render, notes: renderNotes, start, complete, update, data: records, openCall, REFUS_MOTIFS }; // data : lecture pour les contrôles de cohérence
 })();

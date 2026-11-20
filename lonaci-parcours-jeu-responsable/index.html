@@ -10,7 +10,7 @@
   <link rel="stylesheet" href="shell.css?v=4">
   <link rel="stylesheet" href="form.css?v=1">
   <link rel="stylesheet" href="result.css?v=1">
-  <link rel="stylesheet" href="dash.css?v=1">
+  <link rel="stylesheet" href="dash.css?v=5">
 </head>
 <body>
   <header class="mock-bar">
@@ -372,6 +372,20 @@
                 </div>
               </section>
 
+              <section class="card span-12 history" id="history" aria-labelledby="history-title" hidden>
+                <div class="queue-head">
+                  <div>
+                    <h2 id="history-title">Historique et journaux internes <span class="badge-yodan">YODAN uniquement</span></h2>
+                    <p class="sub">Actions de l'admin YODAN (compte unique) : quoi, quand, sur quel dossier. Lecture seule, sans téléphone, e-mail ni résultat de test.</p>
+                  </div>
+                  <div class="htabs" role="group" aria-label="Vue">
+                    <button type="button" data-htab="hist" aria-pressed="true">Historique</button>
+                    <button type="button" data-htab="logs" aria-pressed="false">Journaux internes</button>
+                  </div>
+                </div>
+                <div id="hist-body"></div>
+              </section>
+
               <!-- Repère de maquette : ce que LONACI ne voit pas -->
               <section class="card span-12 ghost" id="ghost" aria-hidden="true">
                 <b>Repère maquette</b> — à cet endroit, YODAN voit la <b>liste nominative des dossiers à risque</b> (téléphone, dossier, score individuel).
@@ -390,13 +404,35 @@
     <aside class="notes" id="notes" aria-label="Notes UX"></aside>
   </div>
 
+  <dialog class="call-dlg" id="call-dlg" aria-labelledby="call-title">
+    <form id="call-form" novalidate>
+      <h2 id="call-title">Résultat de l'appel</h2>
+      <p class="small" id="call-who"></p>
+      <fieldset>
+        <legend class="sr-only">Résultat de l'appel</legend>
+        <label class="opt"><input type="radio" name="issue" value="done"><span><b>Prise en charge validée</b><small>Personne jointe, elle accepte l'accompagnement. La date est enregistrée.</small></span></label>
+        <label class="opt"><input type="radio" name="issue" value="injoignable"><span><b>Injoignable</b><small>Pas de réponse, messagerie, numéro hors service. Le dossier reste « À appeler ».</small></span></label>
+        <label class="opt"><input type="radio" name="issue" value="refus"><span><b>Prise en charge refusée</b><small>Personne jointe, elle ne souhaite pas être accompagnée.</small></span></label>
+      </fieldset>
+      <label class="motif" id="call-motif-wrap" hidden>Motif du refus
+        <select id="call-motif" required><option value="">Choisir un motif…</option></select>
+      </label>
+      <p class="call-err" id="call-err" role="alert" hidden></p>
+      <div class="dlg-actions">
+        <button type="button" class="btn-sec" id="call-cancel">Annuler</button>
+        <button type="submit" class="btn-main">Enregistrer</button>
+      </div>
+    </form>
+  </dialog>
+
   <div class="tip" id="tip" role="tooltip" hidden></div>
   <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
-  <script src="app.js?v=4"></script>
+  <script src="app.js?v=6"></script>
   <script src="form.js?v=4"></script>
   <script src="result.js?v=3"></script>
-  <script src="dash.js?v=6"></script>
+  <script src="dash.js?v=10"></script>
+  <script src="history.js?v=5"></script>
   <script>PJR.boot();</script>
 </body>
 </html>
