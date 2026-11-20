@@ -25,10 +25,10 @@ function runTests() {
   const today = () => todayIso();
   const input = (type, over = {}) => {
     const cfg = presetFor(type); cfg.campaign.domains = ["gamma.exemple.test"];
-    return { name: `Test ${type} ${Math.random().toString(36).slice(2, 6)}`, type, cfg, firstAccount: { name: "Titulaire Démo", email: `titulaire.${type.toLowerCase()}@gamma.exemple.test` }, ...over };
+    return { name: `Test ${type} ${Math.random().toString(36).slice(2, 6)}`, type, sector: db.settings.sectors[0], cfg, firstAccount: { name: "Titulaire Démo", email: `titulaire.${type.toLowerCase()}@gamma.exemple.test` }, ...over };
   };
   const activate = (i) => Object.assign(i, { password: DEMO_PASSWORD, activatedAt: clock.now, token: null });
-  const bilan = (p, id1, level, agency) => recordEvaluation({ partnerId: p.id, test: "BSPA", ids: { id1 }, agency: agency || p.agencies[0], identity: { prenom: "Règle", nom: "Test" }, profile: { genre: "Femme" }, answers: bspaAnswers(level, rng(Math.round(level * 100) + 1)), consentsPre: { traitement: true } });
+  const bilan = (p, id1, level, agency) => recordEvaluation({ partnerId: p.id, test: "BSPA", ids: { id1 }, agency: agency || p.agencies[0], identity: { prenom: "Règle", nom: "Test" }, profile: { genre: "Femme", unite: p.units[0] }, answers: bspaAnswers(level, rng(Math.round(level * 100) + 1)), consentsPre: { traitement: true } });
   const orangeAnswers = () => { for (let s = 1; s < 400; s++) { const a = bspaAnswers((s % 40) / 40, rng(s)); if (scoreTest("BSPA", a).zone === "ORANGE") return a; } throw new Error("pas de réponses orange"); };
 
   /* ---------- Types, rôles, inclusions ---------- */
@@ -100,7 +100,7 @@ function runTests() {
   });
   test("Tenant · une évaluation ou une décision ne peut pas mélanger deux tenants", () => {
     const a = ALPHA(), m = MUT();
-    assert(!recordEvaluation({ partnerId: a.id, test: "BSPA", ids: { id1: "x@alpha.exemple.test" }, answers: bspaAnswers(0.2, rng(3)), consentsPre: { traitement: true }, mode: "campagne", campaignId: db.campaigns.find((c) => c.partnerId === m.id).id }).ok, "campagne d'un autre tenant acceptée");
+    assert(!recordEvaluation({ partnerId: a.id, test: "BSPA", ids: { id1: "x@alpha.exemple.test" }, profile: { unite: a.units[0] }, answers: bspaAnswers(0.2, rng(3)), consentsPre: { traitement: true }, mode: "campagne", campaignId: db.campaigns.find((c) => c.partnerId === m.id).id }).ok, "campagne d'un autre tenant acceptée");
     const p1 = findPerson(m.id, db.people.find((x) => x.partnerId === m.id).id1); assert(!findPerson(a.id, p1.id1), "personne visible depuis un autre tenant");
   });
 
@@ -137,9 +137,9 @@ function runTests() {
     db.evaluations.forEach((e) => { const r = scoreTest(e.test, e.answers); assert(r && r.zone === e.zone && r.score === e.score, e.dossier); });
   });
   test("Règle · entreprise : orange et rouge à prendre en charge automatiquement ; mutuelle : orange décidé par le validateur", () => {
-    const a = recordEvaluation({ partnerId: ALPHA().id, test: "BSPA", ids: { id1: "o1@alpha.exemple.test" }, answers: orangeAnswers(), consentsPre: { traitement: true }, mode: "campagne" }).evaluation;
+    const a = recordEvaluation({ partnerId: ALPHA().id, test: "BSPA", ids: { id1: "o1@alpha.exemple.test" }, profile: { unite: ALPHA().units[0] }, answers: orangeAnswers(), consentsPre: { traitement: true }, mode: "campagne" }).evaluation;
     eq(outcomeOf(a), "AUTO_YES", "entreprise orange");
-    const m = recordEvaluation({ partnerId: MUT().id, test: "BSPA", ids: { id1: "o1@horizon.exemple.test" }, answers: orangeAnswers(), consentsPre: { traitement: true }, mode: "campagne" }).evaluation;
+    const m = recordEvaluation({ partnerId: MUT().id, test: "BSPA", ids: { id1: "o1@horizon.exemple.test" }, profile: { unite: MUT().units[0] }, answers: orangeAnswers(), consentsPre: { traitement: true }, mode: "campagne" }).evaluation;
     eq(outcomeOf(m), "PENDING", "mutuelle orange"); assert(!db.patients.some((x) => x.evalId === m.id), "patient avant décision");
     assert(decide(m.id, true) && db.patients.some((x) => x.evalId === m.id), "oui"); eq(outcomeOf(bilan(MUT(), "v@horizon.exemple.test", 0).evaluation), "AUTO_NO", "vert");
   });
@@ -173,7 +173,7 @@ function runTests() {
   });
   test("Blocage · une évaluation par un agent est refusée si la personne est déjà à prendre en charge ou attend une décision", () => {
     const pt = db.patients.find((x) => !x.closedAt); assert(/déjà à prendre en charge/.test(lookupDossier(pt.partnerId, personOf(pt.personId).id1).blocker), "ouvert");
-    const m = recordEvaluation({ partnerId: MUT().id, test: "BSPA", ids: { id1: "p1@horizon.exemple.test" }, answers: orangeAnswers(), consentsPre: { traitement: true }, mode: "campagne" }).evaluation;
+    const m = recordEvaluation({ partnerId: MUT().id, test: "BSPA", ids: { id1: "p1@horizon.exemple.test" }, profile: { unite: MUT().units[0] }, answers: orangeAnswers(), consentsPre: { traitement: true }, mode: "campagne" }).evaluation;
     assert(/attend déjà une décision/.test(lookupDossier(MUT().id, "p1@horizon.exemple.test").blocker), "décision en attente"); eq(outcomeOf(m), "PENDING", "orange");
   });
   test("Visibilité · liste « À prendre en charge » : admin Yodan seulement ; le suivi du secondaire ne montre que des N°", () => {
@@ -188,7 +188,7 @@ function runTests() {
     const c = db.campaigns.find((x) => campaignState(x) === "EN_COURS" && x.partnerId === ALPHA().id);
     assert(!startParticipation(c.id, "x@gmail.com").ok, "gmail"); const s = startParticipation(c.id, "regle.p@alpha.exemple.test"); assert(s.ok, "départ");
     eq(verifyParticipant(s.challengeId, db.outbox.at(-1).code), "OK", "code");
-    const r = submitParticipation(s.participant.id, { identity: { prenom: "R", nom: "T" }, profile: { genre: "Femme" }, answers: bspaAnswers(0.95, rng(5)), consentsPre: { traitement: true } });
+    const r = submitParticipation(s.participant.id, { identity: { prenom: "R", nom: "T" }, profile: { genre: "Femme", unite: ALPHA().units[1] }, answers: bspaAnswers(0.95, rng(5)), consentsPre: { traitement: true } });
     assert(r.ok && participantStatus(s.participant) === "TERMINE", "fin");
     assert(!db.outbox.some((m) => m.to === "regle.p@alpha.exemple.test" && /bilan|rapport/i.test(m.subject)), "e-mail de bilan envoyé : le résultat doit s'afficher à la fin du test");
     assert(db.patients.some((x) => x.evalId === r.evaluation.id), "à prendre en charge"); assert(!startParticipation(c.id, "regle.p@alpha.exemple.test").ok, "deuxième");
@@ -279,6 +279,84 @@ function runTests() {
     const box = document.createElement("div"), someone = displayName(personOf(db.evaluations.find((e) => e.partnerId === ALPHA().id).personId));
     viewDashboard(box, { partnerIds: [ALPHA().id], actor: "partner" }, "t-p"); assert(!box.textContent.includes(someone), "nom côté partenaire");
     viewDashboard(box, { partnerIds: [ALPHA().id], actor: "yodan" }, "t-y"); assert(/ENT-\d/.test(box.textContent), "détail Yodan");
+  });
+
+  /* ---------- Métadonnées : secteur d'activité, directions / régions ---------- */
+  test("Secteur · obligatoire à la création, choisi dans la liste de l'admin LAMIFI", () => {
+    assert(validatePartner(input("ENTREPRISE", { sector: "" })).sector, "secteur vide accepté");
+    assert(validatePartner(input("ENTREPRISE", { sector: "Secteur inventé" })).sector, "secteur hors liste accepté");
+    const r = createPartner(input("MUTUELLE", { sector: db.settings.sectors[2] }));
+    assert(r.ok && r.partner.sector === db.settings.sectors[2], "secteur enregistré");
+    db.partners.forEach((p) => assert(db.settings.sectors.includes(p.sector), `${p.name} : secteur hors liste`));
+  });
+  test("Secteur · liste LAMIFI : une valeur par ligne, sans doublon ; un secteur utilisé ne peut pas être retiré", () => {
+    const r = setSectors("Banque et assurance\nbanque et ASSURANCE\n  Énergie  \n\nIndustrie\nAssociatif et mutualiste");
+    assert(r.ok, r.err); eq(db.settings.sectors, ["Banque et assurance", "Énergie", "Industrie", "Associatif et mutualiste"], "liste nettoyée");
+    assert(!setSectors("Énergie").ok, "secteur utilisé retiré"); assert(!setSectors("").ok, "liste vide");
+    assert(db.audit.some((a) => a.action === "system.sectors"), "réglage tracé");
+  });
+  test("Directions / régions · liste par défaut (admin LAMIFI) copiée à la création ; la modifier ne change pas les partenaires existants", () => {
+    const e = createPartner(input("ENTREPRISE")).partner, m = createPartner(input("MUTUELLE")).partner;
+    eq(e.units, db.settings.defaultUnits.ENTREPRISE, "directions copiées"); eq(m.units, db.settings.defaultUnits.MUTUELLE, "régions copiées");
+    const before = [...e.units];
+    assert(setDefaultUnits("ENTREPRISE", "Direction unique").ok, "modèle");
+    eq(e.units, before, "partenaire existant modifié par le modèle");
+    eq(createPartner(input("ENTREPRISE", { firstAccount: { name: "Titulaire Démo 2", email: "titulaire.deux@gamma.exemple.test" } })).partner.units, ["Direction unique"], "nouveau partenaire");
+    assert(!setDefaultUnits("MUTUELLE", " \n ").ok, "liste vide acceptée");
+  });
+  test("Directions / régions · liste d'un partenaire ajustable par Yodan ; le questionnaire propose sa liste actuelle", () => {
+    const m = MUT();
+    assert(setPartnerUnits(m.id, "Région du Centre\nRégion du Sud").ok, "réglage");
+    const f = fieldsOf(m).find((x) => x.key === "unite");
+    assert(f && f.required && !f.pii, "champ obligatoire, non identifiant"); eq(f.label, "Région", "libellé mutuelle"); eq(f.options, ["Région du Centre", "Région du Sud"], "options");
+    eq(fieldsOf(ALPHA()).find((x) => x.key === "unite").label, "Direction", "libellé entreprise");
+    assert(db.audit.some((a) => a.action === "system.tenant_units" && a.partnerId === m.id), "réglage tracé sur le tenant");
+  });
+  test("Directions / régions · listes par défaut chez l'admin LAMIFI ; l'admin Yodan personnalise seulement par partenaire", () => {
+    const lam = document.createElement("div"); renderDefaultUnits(lam);
+    eq($$("[data-def]", lam).map((f) => f.dataset.def), ["ENTREPRISE", "MUTUELLE"], "éditeurs LAMIFI");
+    const yod = document.createElement("div"); viewUnitLists(yod, db.partners.map((p) => p.id));
+    assert(!$("[data-def]", yod), "liste par défaut modifiable côté Yodan");
+    assert($$("[data-pick]", yod).length === db.partners.length, "un bouton Modifier par partenaire");
+  });
+  test("Bug corrigé · « Modifier » la liste d'un partenaire garde tous les partenaires dans le tableau et ne change pas le filtre", () => {
+    const pids = db.partners.map((p) => p.id), box = document.createElement("div"), keepFilter = yo.partner;
+    viewUnitLists(box, pids);
+    $(`[data-pick="${MUT().id}"]`, box).click();
+    db.partners.forEach((p) => assert(box.textContent.includes(p.name), `${p.name} a disparu du tableau`));
+    assert($("#own-u", box) && $("#own-u", box).value === MUT().units.join("\n"), "éditeur de la mutuelle");
+    eq(yo.partner, keepFilter, "filtre partenaire modifié");
+    $("#own-u", box).value = "Région du Centre\nRégion du Sud"; $("#own-f", box).dispatchEvent(new Event("submit", { cancelable: true }));
+    eq(MUT().units, ["Région du Centre", "Région du Sud"], "enregistrement");
+    db.partners.forEach((p) => assert(box.textContent.includes(p.name), `${p.name} a disparu après enregistrement`));
+    eq(ALPHA().units, db.settings.defaultUnits.ENTREPRISE, "autre partenaire modifié");
+  });
+  test("Directions / régions · bilan refusé sans valeur ou avec une valeur hors liste ; les bilans gardent leur valeur", () => {
+    const a = ALPHA();
+    const rec = (unite) => recordEvaluation({ partnerId: a.id, test: "BSPA", ids: { id1: `u${Math.random()}@alpha.exemple.test` }, profile: { unite }, answers: bspaAnswers(0.1, rng(9)), consentsPre: { traitement: true }, mode: "campagne" });
+    assert(!rec(undefined).ok, "sans valeur"); assert(!rec("Direction inventée").ok, "hors liste"); assert(rec(a.units[0]).ok, "valeur de la liste");
+    const before = db.evaluations.filter((e) => e.partnerId === a.id).map((e) => e.profile.unite);
+    setPartnerUnits(a.id, "Nouvelle direction");
+    eq(db.evaluations.filter((e) => e.partnerId === a.id).map((e) => e.profile.unite), before, "bilans modifiés");
+    db.evaluations.filter((e) => e.test === "BSPA").forEach((e) => assert(e.profile.unite, `${e.dossier} sans direction / région`));
+  });
+  test("Tableau de bord · groupe Direction / région = total ; le filtre donne le même chiffre que le groupe ; moins de 5 masqué côté partenaire", () => {
+    [ALPHA(), MUT()].forEach((p) => {
+      const all = bspaModel([p.id], false), g = all.by[0];
+      eq(g.label, UNIT_LABEL[p.type].one, `${p.name} libellé`); eq(sum(Object.fromEntries(g.rows.map((r) => [r.group, r.total]))), all.total, `${p.name} total`);
+      g.rows.forEach((r) => eq(bspaModel([p.id], false, "all", null, r.group).total, r.total, `${p.name}/${r.group}`));
+    });
+    const small = bspaModel([ALPHA().id], true).by[0].rows.find((r) => r.total > 0 && r.total < MIN_GROUP);
+    assert(small, "la démo doit contenir une direction de moins de 5 bilans");
+    const box = document.createElement("div");
+    viewDashboard(box, { partnerIds: [ALPHA().id], actor: "partner" }, "t-unit");
+    assert(box.textContent.includes(`${small.group}moins de ${MIN_GROUP} : masqué`), "petite direction non masquée");
+  });
+  test("Filtre secteur · Yodan : seuls les partenaires du secteur ; filtre seulement, aucune donnée nouvelle dans les e-mails ni l'historique", () => {
+    const inSector = (x) => db.partners.filter((p) => p.sector === x).map((p) => p.id);
+    eq(inSector(ALPHA().sector), [ALPHA().id], "secteur Alpha");
+    assert(!db.outbox.some((m) => JSON.stringify(m).includes(ALPHA().units[0])), "direction dans un e-mail");
+    assert(!db.audit.some((a) => a.action.startsWith("evaluation") && JSON.stringify(a.details).includes(ALPHA().units[0])), "direction dans l'historique d'un bilan");
   });
 
   onLogout = keepLogout;

@@ -129,6 +129,8 @@ const hasFeature = (cfg, key) => enabledRoles(cfg).some((r) => tabsFor(cfg, r).i
 const db = {
   partners: [], identities: [], assignments: [], outbox: [], challenges: [], audit: [], logs: [],
   evaluations: [], people: [], patients: [], campaigns: [], participants: [], reportLinks: [],
+  /** Réglages globaux (admin LAMIFI) : secteurs et listes par défaut des directions / régions. */
+  settings: { sectors: [], defaultUnits: { ENTREPRISE: [], MUTUELLE: [] } },
 };
 /* Le domaine (tests, parcours de soin, tableaux de bord) est dans domain.js ; la démo dans seed.js. */
 /** Session ouverte par la page de connexion (null = accès direct de démo par la barre de maquette). */
@@ -157,6 +159,7 @@ const ACTION_CODES = {
   "Création identifiant": "user.create", "Ajout rôle": "user.role_add", "Désactivation rôle": "user.role_deactivate", "Réactivation rôle": "user.role_activate",
   "Désactivation identifiant": "user.deactivate", "Réactivation identifiant": "user.activate", "Migration rôle": "user.role_migrate", "Renvoi invitation": "user.invite_resend",
   "Création partenaire": "system.tenant_create", "Inclusion de fonctionnalité": "system.tenant_roles", "Création agence": "agency.create",
+  "Secteurs d'activité": "system.sectors", "Liste par défaut": "system.unit_defaults", "Liste du partenaire": "system.tenant_units",
   "Création campagne": "campaign.create", "Envoi campagne": "campaign.send", "Évaluation transmise": "evaluation.create", "Bilan de campagne": "evaluation.campaign_submit",
   "Décision": "evaluation.validate", "Consultation détail évaluations": "evaluation.list_view", "Recherche de dossier": "evaluation.lookup",
   "Ouverture rapport individuel": "final_report.view", "Consultation fiche personne": "patient.view", "Appel": "patient.call", "Retour d'appel": "patient.call_result",
@@ -198,6 +201,8 @@ function validatePartner(input) {
   if (!cfg.tests.length) e.tests = "Choisissez au moins un test.";
   else if (cfg.tests.some((t) => !TESTS[t])) e.tests = "Test inconnu.";
   if (!PARTNER_TYPES[input.type]) e.type = "Choisissez un type.";
+  if (!input.sector) e.sector = "Choisissez un secteur d'activité.";
+  else if (!db.settings.sectors.includes(input.sector)) e.sector = "Secteur inconnu : il doit figurer dans la liste de l'admin LAMIFI.";
   if (cfg.campaign.on) {
     if (!cfg.campaign.roles.length) e.campaign = "Placez la campagne sur au moins un rôle actif.";
     if (cfg.campaign.roles.some((r) => !cfg.roles[r].on)) e.campaign = "La campagne ne peut être placée que sur un rôle actif.";
@@ -229,6 +234,9 @@ function createPartner(input, { silent = false } = {}) {
     // Base unique pour tous les partenaires : chaque ligne porte l'identifiant du tenant (= id du partenaire),
     // et la base filtre par tenant (row-level security) en plus du code applicatif.
     tenant: `T-${slug}`,
+    // Métadonnées (filtres seulement) : secteur choisi dans la liste LAMIFI ; directions / régions copiées
+    // depuis la liste par défaut Yodan du type (copie : modifier le modèle ne change pas ce partenaire).
+    sector: input.sector, units: [...db.settings.defaultUnits[input.type]],
   };
   db.partners.push(p);
   const role = highestRole(p);
@@ -236,6 +244,58 @@ function createPartner(input, { silent = false } = {}) {
   addRole(idn.identity.id, role, [...p.agencies]);
   if (!silent) audit("Création partenaire", `${name} (${PARTNER_TYPES[p.type].label}${p.customized ? ", modifié" : ""})`);
   return { ok: true, partner: p, identity: idn.identity, role };
+}
+
+/* =====================================================================
+ * Métadonnées des partenaires (filtres seulement, jamais d'identification)
+ *  - secteur d'activité : liste gérée par l'admin LAMIFI, choisie à la création du partenaire ;
+ *  - directions (entreprise) / structures géographiques (mutuelle) : liste par défaut par type gérée par
+ *    l'admin LAMIFI, copiée à la création, puis personnalisée partenaire par partenaire par l'admin Yodan.
+ * ===================================================================== */
+const UNIT_LABEL = {
+  ENTREPRISE: { one: "Direction", list: "Directions", all: "Toutes les directions", ex: "Ressources humaines" },
+  MUTUELLE: { one: "Région", list: "Structures géographiques", all: "Toutes les régions", ex: "Région du Centre" },
+};
+/** Champ du questionnaire : direction (entreprise) ou région (mutuelle), options = liste actuelle du partenaire. */
+const unitField = (p) => ({ key: "unite", label: UNIT_LABEL[p.type].one, type: "select", options: [...p.units], pii: false, required: true, level: "person" });
+/** Champs du questionnaire d'un partenaire : identité, puis direction / région, puis profil (statistiques). */
+const fieldsOf = (p) => { const f = [...p.fields]; f.splice(3, 0, unitField(p)); return f; };
+/** Texte saisi (une valeur par ligne) → liste propre, sans doublon (casse et accents ignorés). */
+function parseList(text) {
+  const out = [];
+  String(text ?? "").split(/\r?\n/).map((x) => x.trim().replace(/\s+/g, " ")).filter(Boolean).forEach((x) => { if (!out.some((y) => norm(y) === norm(x))) out.push(x); });
+  return out;
+}
+const checkList = (list, what) => (!list.length ? `Indiquez au moins ${what}.` : list.some((x) => x.length > 60) ? "60 caractères maximum par ligne." : null);
+/** Admin LAMIFI : liste des secteurs. Un secteur utilisé par un partenaire ne peut pas être retiré. */
+function setSectors(text) {
+  const list = parseList(text);
+  const err = checkList(list, "un secteur");
+  if (err) return { ok: false, err };
+  const used = db.partners.filter((p) => !list.includes(p.sector)).map((p) => `${p.sector} (${p.name})`);
+  if (used.length) return { ok: false, err: `Secteur utilisé, impossible de le retirer : ${used.join(", ")}.` };
+  db.settings.sectors = list;
+  audit("Secteurs d'activité", `${list.length} secteur(s)`);
+  return { ok: true, list };
+}
+/** Admin LAMIFI : liste par défaut d'un type (ne change pas les partenaires existants). */
+function setDefaultUnits(type, text) {
+  const list = parseList(text);
+  const err = checkList(list, `une ${UNIT_LABEL[type].one.toLowerCase()}`);
+  if (err) return { ok: false, err };
+  db.settings.defaultUnits[type] = list;
+  audit("Liste par défaut", `${UNIT_LABEL[type].list} (${PARTNER_TYPES[type].label})`);
+  return { ok: true, list };
+}
+/** Admin Yodan : liste d'un partenaire. Les bilans déjà enregistrés gardent leur valeur. */
+function setPartnerUnits(partnerId, text) {
+  const p = partnerOf(partnerId);
+  const list = parseList(text);
+  const err = checkList(list, `une ${UNIT_LABEL[p.type].one.toLowerCase()}`);
+  if (err) return { ok: false, err };
+  p.units = list;
+  audit("Liste du partenaire", `${UNIT_LABEL[p.type].list} — ${p.name}`, { partnerId: p.id });
+  return { ok: true, list };
 }
 
 /* =====================================================================

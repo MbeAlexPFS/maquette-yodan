@@ -135,6 +135,8 @@ function recordEvaluation(input) {
   // Base commune : on refuse toute référence à une donnée d'un autre tenant.
   if (campaignId && campaignOf(campaignId)?.partnerId !== partnerId) return { ok: false, err: "Campagne d'un autre partenaire." };
   if (agency && !p.agencies.includes(agency)) return { ok: false, err: "Agence d'un autre partenaire." };
+  // Direction (entreprise) / région (mutuelle) : obligatoire et prise dans la liste actuelle du partenaire.
+  if (!p.units.includes(profile.unite)) return { ok: false, err: `${UNIT_LABEL[p.type].one} : choisissez une valeur de la liste.` };
   const res = scoreTest(test, answers);
   if (!res) return { ok: false, err: "Répondez à toutes les questions." };
   if (consentsOf(p, "pre").some((c) => c.required && !consentsPre[c.id])) return { ok: false, err: "Le consentement obligatoire n'est pas donné." };
@@ -259,14 +261,27 @@ function dashboardModel(partnerIds, test, censor, agencies = null) {
   const weekly = weeksBack(12).map((w) => { const sub = evs.filter((e) => e.date >= w && e.date < addDays(w, 7)); return { week: w, total: sub.length, zones: countBy(sub, (e) => e.zone, ZONES) }; });
   return { test, total: evs.length, zones, outcomes, byAgency, weekly, censor, tooSmall: censor && evs.length < MIN_GROUP };
 }
-/** Tableau de bord BSPA (repris du tableau de bord RH : agrégé, seuil de 5). */
-function bspaModel(pids, censor, campaignId = "all", agencies = null) {
+/** Directions / régions proposées en filtre : celles des partenaires affichés (+ valeurs déjà présentes dans les bilans). */
+function unitsOf(pids) {
+  const out = [];
+  pids.forEach((id) => partnerOf(id).units.forEach((u) => { if (!out.includes(u)) out.push(u); }));
+  initials(pids, "BSPA").forEach((e) => { const u = e.profile.unite; if (u && !out.includes(u)) out.push(u); });
+  return out;
+}
+/** Libellé du filtre selon les types affichés (« Direction », « Région » ou « Direction / région »). */
+function unitLabelOf(pids) {
+  const types = [...new Set(pids.map((id) => partnerOf(id).type))];
+  return types.length === 1 ? UNIT_LABEL[types[0]] : { one: "Direction / région", list: "Directions / régions", all: "Toutes les directions / régions" };
+}
+/** Tableau de bord BSPA (repris du tableau de bord RH : agrégé, seuil de 5). unit = filtre direction / région. */
+function bspaModel(pids, censor, campaignId = "all", agencies = null, unit = "all") {
   const base = dashboardModel(pids, "BSPA", censor, agencies);
-  const evs = initials(pids, "BSPA", agencies).filter((e) => campaignId === "all" || e.campaignId === campaignId);
+  const evs = initials(pids, "BSPA", agencies).filter((e) => (campaignId === "all" || e.campaignId === campaignId) && (unit === "all" || e.profile.unite === unit));
   const n = evs.length;
   const prof = ZONES.map((z) => evs.filter((e) => e.zone === z).length);
   const dims = Object.fromEntries(BSPA_DIMS.map((k) => [k, n ? Math.round(evs.reduce((s, e) => s + e.dims[k].pct, 0) / n) : 0]));
-  const by = BSPA_DEMO.map((f) => ({ label: f.label, rows: f.options.map((o) => { const sub = evs.filter((e) => e.profile[f.key] === o); return { group: o === "Je préfère ne pas répondre" ? "Non précisé" : o, total: sub.length, zones: countBy(sub, (e) => e.zone, ZONES) }; }) }));
+  const unitRows = unitsOf(pids).filter((u) => unit === "all" || u === unit).map((u) => { const sub = evs.filter((e) => e.profile.unite === u); return { group: u, total: sub.length, zones: countBy(sub, (e) => e.zone, ZONES) }; });
+  const by = [{ label: unitLabelOf(pids).one, rows: unitRows }, ...BSPA_DEMO.map((f) => ({ label: f.label, rows: f.options.map((o) => { const sub = evs.filter((e) => e.profile[f.key] === o); return { group: o === "Je préfère ne pas répondre" ? "Non précisé" : o, total: sub.length, zones: countBy(sub, (e) => e.zone, ZONES) }; }) }))];
   const camps = db.campaigns.filter((c) => pids.includes(c.partnerId) && c.test === "BSPA" && campaignState(c) !== "AVENIR");
   const compare = camps.map((c) => { const sub = evs.filter((e) => e.campaignId === c.id); return { id: c.id, name: c.name, total: sub.length, prof: ZONES.map((z) => sub.filter((e) => e.zone === z).length), wellbeing: sub.length ? Math.round(sub.reduce((s, e) => s + e.dims.A.pct, 0) / sub.length) : 0 }; });
   return { ...base, total: n, tooSmall: censor && n < MIN_GROUP, prof, dims, by, alerts: evs.filter((e) => e.dims.E.zone === "ROUGE").length, compare, campaigns: camps };

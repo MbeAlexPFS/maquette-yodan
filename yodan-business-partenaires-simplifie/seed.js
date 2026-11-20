@@ -36,7 +36,17 @@ function bspaAnswers(level, r) {
 const pickW = (r, weights) => { let x = r() * weights.reduce((a, b) => a + b, 0); for (let i = 0; i < weights.length; i++) { x -= weights[i]; if (x <= 0) return i; } return weights.length - 1; };
 const minIso = (a, b) => (a < b ? a : b);
 
+/** Réglages de démo : secteurs (admin LAMIFI) et listes par défaut (admin Yodan). */
+const SEED_SECTORS = ["Banque et assurance", "BTP et immobilier", "Commerce et distribution", "Industrie", "Santé et action sociale", "Services aux entreprises", "Télécoms et numérique", "Transport et logistique", "Administration publique", "Associatif et mutualiste"];
+const SEED_UNITS = {
+  ENTREPRISE: ["Direction générale", "Ressources humaines", "Finances", "Commerciale", "Opérations", "Systèmes d'information"],
+  MUTUELLE: ["District d'Abidjan", "Région du Centre", "Région du Nord", "Région de l'Est", "Région de l'Ouest"],
+};
+const SECTOR_OF = { "Entreprise Démo Alpha": "Banque et assurance", "Entreprise Démo Beta": "Industrie", "Mutuelle Démo Horizon": "Associatif et mutualiste" };
+
 function seed() {
+  db.settings.sectors = [...SEED_SECTORS];
+  db.settings.defaultUnits = { ENTREPRISE: [...SEED_UNITS.ENTREPRISE], MUTUELLE: [...SEED_UNITS.MUTUELLE] };
   // Admin LAMIFI Business : créé depuis .env, change son mot de passe à la 1re connexion.
   const la = seedActiveIdentity({ name: ENV.LAMIFI_ADMIN_NAME, email: ENV.LAMIFI_ADMIN_EMAIL, kind: "LAMIFI_ADMIN" }, ENV.LAMIFI_ADMIN_PASSWORD);
   la.mustChangePassword = true;
@@ -45,7 +55,7 @@ function seed() {
   const mk = (name, type, agencies, account, tests, domain, include = (c) => c, emailPro = false) => {
     const cfg = include(presetFor(type)); cfg.tests = tests;
     if (emailPro) { cfg.campaign.emailPro = true; cfg.campaign.domains = [domain]; }
-    const r = createPartner({ name, type, cfg, agencies, firstAccount: account }, { silent: true });
+    const r = createPartner({ name, type, sector: SECTOR_OF[name], cfg, agencies, firstAccount: account }, { silent: true });
     Object.assign(r.identity, { password: DEMO_PASSWORD, activatedAt: CLOCK_START - 20 * DAY, token: null });
     r.partner.createdAt = addDays(todayIso(), -240);
     return r.partner;
@@ -87,7 +97,7 @@ function seed() {
       const answers = test === "BSPA" ? bspaAnswers(level, RB) : answersForTotal(4, 3, Math.round(level * 12), RB);
       const r = recordEvaluation({ partnerId: p.id, test, agency: p.agencies[k % p.agencies.length], mode: "campagne", campaignId: c.id, date: x.startedAt, ids: { id1: email },
         identity: { prenom, nom, email, telephone: RB() < 0.6 ? `07 00 ${pad(k % 100)} ${pad((k * 7) % 100)} ${pad((k * 3) % 100)}` : "" },
-        profile: Object.fromEntries(BSPA_DEMO.map((f) => [f.key, f.options[pickW(RB, f.key === "genre" ? [5, 5, 1] : f.options.map(() => 1))]])), answers, consentsPre: { traitement: true } });
+        profile: { unite: p.units[pickW(RB, p.units.map((_, i) => (i === 0 ? 1 : 3)))], ...Object.fromEntries(BSPA_DEMO.map((f) => [f.key, f.options[pickW(RB, f.key === "genre" ? [5, 5, 1] : f.options.map(() => 1))]])) }, answers, consentsPre: { traitement: true } });
       if (!r.ok) { console.warn("seed campagne", r.err); continue; }
       if (r.evaluation.zone !== "VERT") setPostConsents(r.evaluation.id, { support: RB() < 0.55, callback: RB() < 0.5 });
       x.completedAt = x.startedAt; x.evalId = r.evaluation.id;

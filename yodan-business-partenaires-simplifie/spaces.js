@@ -37,29 +37,35 @@ function rolesModal(p, done) {
 RENDER.lamifi = (root) => {
   const tab = tabOf("lamifi", "partners");
   root.innerHTML = `${appBar(yodanLogo("LAMIFI Business"), "Admin LAMIFI Business", ENV.LAMIFI_ADMIN_NAME)}
-    ${tabsHtml("lamifi", [{ id: "partners", icon: "🏢", label: "Partenaires", count: db.partners.length }, { id: "create", icon: "＋", label: "Créer un partenaire" }, { id: "history", icon: "🕘", label: "Historique" }, { id: "logs", icon: "🗂", label: "Journaux internes" }], tab)}
+    ${tabsHtml("lamifi", [{ id: "partners", icon: "🏢", label: "Partenaires", count: db.partners.length }, { id: "create", icon: "＋", label: "Créer un partenaire" }, { id: "sectors", icon: "🏷", label: "Secteurs d'activité", count: db.settings.sectors.length }, { id: "units", icon: "🧭", label: "Directions et régions" }, { id: "history", icon: "🕘", label: "Historique" }, { id: "logs", icon: "🗂", label: "Journaux internes" }], tab)}
     <div class="page" id="body"></div>`;
   bindAppBar(root);
   bindTabs(root);
-  ({ create: renderCreatePartner, history: (el) => historyView(el, { key: "lamifi" }), logs: logsView }[tab] || renderPartnerList)($("#body", root));
+  ({ create: renderCreatePartner, sectors: renderSectors, units: renderDefaultUnits, history: (el) => historyView(el, { key: "lamifi" }), logs: logsView }[tab] || renderPartnerList)($("#body", root));
 };
+const lamifiList = { sector: "all" };
 function renderPartnerList(el) {
+  if (lamifiList.sector !== "all" && !db.settings.sectors.includes(lamifiList.sector)) lamifiList.sector = "all";
+  const list = db.partners.filter((p) => lamifiList.sector === "all" || p.sector === lamifiList.sector);
   el.innerHTML = `<div class="page-head"><div class="grow"><span class="eyebrow">Partenaires</span><h1>Espaces partenaires</h1></div>
       <button type="button" class="btn btn-orange" id="to-create">＋ Créer un partenaire</button></div>
-    <div class="card table-wrap"><table class="table"><thead><tr><th>Partenaire</th><th>Type</th><th>Tests</th><th>E-mail pro</th><th>Tenant</th><th class="num-cell">Comptes</th><th></th></tr></thead><tbody>
-    ${db.partners.map((p) => `<tr><td><strong>${esc(p.name)}</strong><div class="small muted">créé le ${fmtDate(p.createdAt)}</div></td>
+    <div class="toolbar"><label class="small">Secteur <select id="pl-s"><option value="all">Tous les secteurs</option>${db.settings.sectors.map((x) => `<option ${lamifiList.sector === x ? "selected" : ""}>${esc(x)}</option>`).join("")}</select></label><span class="small muted">${list.length} partenaire(s)</span></div>
+    <div class="card table-wrap"><table class="table"><thead><tr><th>Partenaire</th><th>Type</th><th>Secteur</th><th>Tests</th><th>E-mail pro</th><th>Tenant</th><th class="num-cell">Comptes</th><th></th></tr></thead><tbody>
+    ${list.map((p) => `<tr><td><strong>${esc(p.name)}</strong><div class="small muted">créé le ${fmtDate(p.createdAt)}</div></td>
       <td>${PARTNER_TYPES[p.type].ico} ${esc(PARTNER_TYPES[p.type].label)}${p.customized ? ` <span class="pill bleu" title="Une fonctionnalité a été incluse dans un autre rôle">inclusions</span>` : ""}</td>
+      <td class="small">${esc(p.sector)}<div class="muted">${p.units.length} ${esc(UNIT_LABEL[p.type].list.toLowerCase())}</div></td>
       <td>${p.tests.map((t) => `<span class="pill bleu">${t}</span>`).join(" ")}</td><td class="small">${p.campaign.emailPro ? esc(p.campaign.domains.join(", ")) : '<span class="muted">non exigé</span>'}</td>
       <td class="small"><code>${esc(p.tenant)}</code></td>
       <td class="num-cell">${db.identities.filter((i) => i.partnerId === p.id).length}</td>
       <td class="actions"><button type="button" class="btn btn-sm" data-roles="${p.id}">Rôles</button><button type="button" class="btn btn-sm btn-ghost" data-open="${p.id}">Ouvrir l'espace</button></td></tr>`).join("")}
     </tbody></table></div>`;
   $("#to-create", el).addEventListener("click", () => setTab("lamifi", "create"));
+  $("#pl-s", el).addEventListener("change", (e) => { lamifiList.sector = e.target.value; renderPartnerList(el); });
   $$("[data-open]", el).forEach((b) => b.addEventListener("click", () => go("partner", { partnerId: b.dataset.open })));
   $$("[data-roles]", el).forEach((b) => b.addEventListener("click", () => rolesModal(partnerOf(b.dataset.roles), () => renderPartnerList(el))));
 }
 
-const newDraft = () => ({ name: "", type: "ENTREPRISE", cfg: presetFor("ENTREPRISE"), domainsText: "", fa: { name: "", email: "" }, errors: {} });
+const newDraft = () => ({ name: "", type: "ENTREPRISE", sector: "", cfg: presetFor("ENTREPRISE"), domainsText: "", fa: { name: "", email: "" }, errors: {} });
 let cd = newDraft();
 /** Création par type, en un écran : nom, type, tests, domaines, premier compte. Inclusions : facultatives, repliées. */
 function renderCreatePartner(el) {
@@ -69,8 +75,10 @@ function renderCreatePartner(el) {
     <div class="split"><form class="card" id="cp" novalidate>
       <div class="section-title"><span class="num">1</span><h2>Partenaire</h2></div>
       <div class="field ${err("name")}"><label for="cp-name">Nom</label><input id="cp-name" value="${esc(cd.name)}" placeholder="Ex. : Entreprise Démo Gamma" autocomplete="off">${errBox(e, "name")}</div>
+      <div class="field ${err("sector")}"><label for="cp-sector">Secteur d'activité</label><select id="cp-sector"><option value="">Choisir…</option>${db.settings.sectors.map((x) => `<option ${cd.sector === x ? "selected" : ""}>${esc(x)}</option>`).join("")}</select><div class="hint">Liste gérée dans l'onglet « Secteurs d'activité ». Sert uniquement de filtre.</div>${errBox(e, "sector")}</div>
       <div class="type-cards" role="radiogroup" aria-label="Type de partenaire">${Object.entries(PARTNER_TYPES).map(([k, t]) => `<button type="button" role="radio" aria-checked="${cd.type === k}" class="type-card ${cd.type === k ? "on" : ""}" data-type="${k}"><span class="ico">${t.ico}</span><strong>${esc(t.label)}</strong><span class="small">${esc(t.desc)}</span></button>`).join("")}</div>
 
+      <div class="banner banner-info small">${esc(UNIT_LABEL[cd.type].list)} : la liste par défaut (onglet « Directions et régions ») est copiée à la création (${db.settings.defaultUnits[cd.type].map(esc).join(", ") || "vide"}). Elle sert de champ « ${esc(UNIT_LABEL[cd.type].one)} » dans le questionnaire et de filtre dans le tableau de bord ; l'admin Yodan peut l'ajuster ensuite.</div>
       <div class="section-title"><span class="num">2</span><h2>Tests et campagnes</h2></div>
       <div class="field"><span class="lbl">Tests proposés</span><div class="chips-check">${TEST_KEYS.map((t) => `<label><input type="checkbox" data-test="${t}" ${c.tests.includes(t) ? "checked" : ""}> ${t} <span class="small muted">· ${TESTS[t].desc}</span></label>`).join("")}</div>${errBox(e, "tests")}</div>
       <label class="switch"><input type="checkbox" id="cp-pro" ${c.campaign.emailPro ? "checked" : ""}><span class="track"></span> Exiger une adresse e-mail professionnelle <span class="small muted">(facultatif)</span></label>
@@ -88,6 +96,7 @@ function renderCreatePartner(el) {
     <aside class="card sticky"><span class="eyebrow">Aperçu</span><h2>Onglets par rôle</h2>${tabsSummaryHtml(c)}</aside></div>`;
   const keep = () => {
     cd.name = $("#cp-name", el).value;
+    cd.sector = $("#cp-sector", el).value;
     if ($("#cp-dom", el)) { cd.domainsText = $("#cp-dom", el).value; c.campaign.domains = parseDomains(cd.domainsText); }
     cd.fa = { name: $("#fa-name", el).value, email: $("#fa-email", el).value };
     cd.openInclude = $(".include-box", el).open;
@@ -99,11 +108,26 @@ function renderCreatePartner(el) {
   $("#cp-pro", el).addEventListener("change", (ev) => { keep(); c.campaign.emailPro = ev.target.checked; if (!c.campaign.emailPro) c.campaign.domains = []; else c.campaign.domains = parseDomains(cd.domainsText); again(); });
   $("#cp", el).addEventListener("submit", (ev) => {
     ev.preventDefault(); keep();
-    const r = createPartner({ name: cd.name, type: cd.type, cfg: c, firstAccount: cd.fa });
+    const r = createPartner({ name: cd.name, type: cd.type, sector: cd.sector, cfg: c, firstAccount: cd.fa });
     if (!r.ok) { cd.errors = r.errors; again(); $(".has-err input, .has-err textarea", el)?.focus(); return; }
     toast(`Partenaire « ${esc(r.partner.name)} » créé. Lien d'activation envoyé à ${esc(r.identity.email)} (${ROLE_LABEL[r.role]}).`);
     cd = newDraft();
     setTab("lamifi", "partners");
+  });
+}
+
+/** Admin LAMIFI : liste des secteurs d'activité (choisie à la création d'un partenaire, sert de filtre). */
+function renderSectors(el, err = "") {
+  const usage = (x) => db.partners.filter((p) => p.sector === x).length;
+  el.innerHTML = `<div class="page-head"><div class="grow"><span class="eyebrow">Réglages</span><h1>Secteurs d'activité</h1><p class="small muted" style="margin:0">Métadonnée des partenaires : sert uniquement de filtre (listes, tableaux de bord Yodan).</p></div></div>
+    <div class="split"><form class="card" id="sec-f"><div class="field"><label for="sec-t">Un secteur par ligne</label><textarea id="sec-t" rows="12">${esc(db.settings.sectors.join("\n"))}</textarea><div class="hint">Un secteur utilisé par un partenaire ne peut pas être retiré.</div></div>
+      ${err ? `<div class="banner banner-err" role="alert">${esc(err)}</div>` : ""}<button class="btn btn-primary" type="submit">Enregistrer</button></form>
+    <aside class="card sticky"><h2>Utilisation</h2><div class="table-wrap"><table class="table"><thead><tr><th>Secteur</th><th class="num-cell">Partenaires</th></tr></thead><tbody>${db.settings.sectors.map((x) => `<tr><td>${esc(x)}</td><td class="num-cell">${usage(x)}</td></tr>`).join("")}</tbody></table></div></aside></div>`;
+  $("#sec-f", el).addEventListener("submit", (e) => {
+    e.preventDefault();
+    const r = setSectors($("#sec-t", el).value);
+    if (!r.ok) return renderSectors(el, r.err);
+    toast("Secteurs enregistrés."); render();
   });
 }
 
@@ -208,7 +232,7 @@ function migrateModal(a, done) {
 /* =====================================================================
  * Admin Yodan — onglets communs à tous les partenaires
  * ===================================================================== */
-const yo = { partner: "all" };
+const yo = { partner: "all", sector: "all" };
 const YODAN_TABS = [
   { id: "dashboard", icon: "📊", label: "Tableau de bord" },
   { id: "campagnes", icon: "📣", label: "Campagnes et participants" },
@@ -217,18 +241,25 @@ const YODAN_TABS = [
   { id: "comptes", icon: "👥", label: "Comptes" },
   { id: "patients", icon: "🩺", label: "À prendre en charge" },
   { id: "partenaires", icon: "🧩", label: "Rôles du partenaire" },
+  { id: "listes", icon: "🗂", label: "Directions et régions" },
 ];
 RENDER.yodan = (root) => {
   const tab = tabOf("yodan", "dashboard");
-  const pids = yo.partner === "all" ? db.partners.map((p) => p.id) : [yo.partner];
+  if (yo.sector !== "all" && !db.settings.sectors.includes(yo.sector)) yo.sector = "all";
+  // Filtre secteur : limite les partenaires de tous les onglets (métadonnée, filtre seulement).
+  const inSector = db.partners.filter((p) => yo.sector === "all" || p.sector === yo.sector);
+  if (yo.partner !== "all" && !inSector.some((p) => p.id === yo.partner)) yo.partner = "all";
+  const pids = yo.partner === "all" ? inSector.map((p) => p.id) : [yo.partner];
   // Compteur : personnes à prendre en charge jamais exportées.
   const counts = { validation: pendingDecisions(pids).length, patients: db.patients.filter((x) => pids.includes(x.partnerId) && !x.closedAt && !x.exports.length).length };
-  const filter = `<label class="small" style="display:flex;gap:.4rem;align-items:center"><span class="muted">Partenaire</span><select id="yo-p" class="input" style="width:auto">${tab === "partenaires" ? "" : `<option value="all">Tous les partenaires</option>`}${db.partners.map((p) => `<option value="${p.id}" ${yo.partner === p.id ? "selected" : ""}>${esc(p.name)}</option>`).join("")}</select></label>`;
+  const sectorSel = `<label class="small" style="display:flex;gap:.4rem;align-items:center"><span class="muted">Secteur</span><select id="yo-s" class="input" style="width:auto"><option value="all">Tous les secteurs</option>${db.settings.sectors.map((x) => `<option ${yo.sector === x ? "selected" : ""}>${esc(x)}</option>`).join("")}</select></label>`;
+  const filter = `${sectorSel}<label class="small" style="display:flex;gap:.4rem;align-items:center"><span class="muted">Partenaire</span><select id="yo-p" class="input" style="width:auto">${tab === "partenaires" ? "" : `<option value="all">Tous les partenaires</option>`}${inSector.map((p) => `<option value="${p.id}" ${yo.partner === p.id ? "selected" : ""}>${esc(p.name)}</option>`).join("")}</select></label>`;
   root.innerHTML = `${appBar(yodanLogo("Admin Yodan"), "Admin Yodan", "Admin Yodan Démo", filter)}
     ${tabsHtml("yodan", YODAN_TABS.map((t) => ({ ...t, count: counts[t.id], hot: true })), tab)}<div class="page" id="body"></div>`;
   bindAppBar(root); bindTabs(root);
-  if (tab === "partenaires" && yo.partner === "all") { yo.partner = db.partners[0].id; return render(); }
+  if (tab === "partenaires" && yo.partner === "all") { if (!inSector.length) yo.sector = "all"; yo.partner = (inSector[0] || db.partners[0]).id; return render(); }
   $("#yo-p", root).addEventListener("change", (e) => { yo.partner = e.target.value; render(); });
+  $("#yo-s", root).addEventListener("change", (e) => { yo.sector = e.target.value; yo.partner = "all"; render(); });
   const scope = { partnerIds: pids, censor: false, actor: "yodan" };
   const body = $("#body", root);
   ({
@@ -239,8 +270,62 @@ RENDER.yodan = (root) => {
     comptes: () => viewAccounts(body, scope, "yodan"),
     patients: () => viewPatients(body, scope),
     partenaires: () => viewPartnerRoles(body, partnerOf(yo.partner)),
+    listes: () => viewUnitLists(body, pids),
   })[tab]();
 };
+/* ---------- Directions (entreprise) / structures géographiques (mutuelle) ---------- */
+/** Admin LAMIFI : listes par défaut par type, copiées à la création d'un partenaire. */
+function renderDefaultUnits(el, errs = {}) {
+  const card = (type) => `<form class="card" data-def="${type}"><h2>${PARTNER_TYPES[type].ico} ${esc(UNIT_LABEL[type].list)} par défaut <span class="pill gris">${esc(PARTNER_TYPES[type].label)}</span></h2>
+    <div class="field"><label for="def-${type}">Une valeur par ligne (ex. ${esc(UNIT_LABEL[type].ex)})</label><textarea id="def-${type}" rows="8">${esc(db.settings.defaultUnits[type].join("\n"))}</textarea>
+    <div class="hint">Copiée à la création d'un partenaire de ce type. La modifier ne change pas les partenaires existants : l'admin Yodan personnalise ensuite la liste de chaque partenaire.</div></div>
+    ${errs[type] ? `<div class="banner banner-err" role="alert">${esc(errs[type])}</div>` : ""}<button class="btn btn-primary btn-sm" type="submit">Enregistrer</button></form>`;
+  el.innerHTML = `<div class="page-head"><div class="grow"><span class="eyebrow">Réglages</span><h1>Directions et régions par défaut</h1><p class="small muted" style="margin:0">Métadonnées : servent uniquement de filtre (champ du questionnaire, regroupement du tableau de bord).</p></div></div>
+    <div class="grid-2">${card("ENTREPRISE")}${card("MUTUELLE")}</div>`;
+  $$("[data-def]", el).forEach((f) => f.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const type = f.dataset.def, r = setDefaultUnits(type, $(`#def-${type}`, f).value);
+    if (!r.ok) return renderDefaultUnits(el, { [type]: r.err });
+    toast("Liste par défaut enregistrée."); renderDefaultUnits(el);
+  }));
+}
+
+/**
+ * Admin Yodan : personnalisation de la liste de chaque partenaire.
+ * Le tableau garde tous les partenaires affichés ; « Modifier » ouvre l'éditeur à côté, sans toucher
+ * au filtre partenaire de la barre du haut (sinon les autres partenaires disparaissaient du tableau).
+ */
+const unitEdit = { id: null, draft: null };
+function viewUnitLists(el, pids, err = "") {
+  const partners = pids.map(partnerOf);
+  if (!partners.some((p) => p.id === unitEdit.id)) Object.assign(unitEdit, { id: partners.length === 1 ? partners[0].id : null, draft: null });
+  const one = unitEdit.id ? partnerOf(unitEdit.id) : null;
+  const used = (p, u) => db.evaluations.filter((e) => e.partnerId === p.id && e.profile.unite === u).length;
+  const isDefault = (p) => JSON.stringify(p.units) === JSON.stringify(db.settings.defaultUnits[p.type]);
+  const table = `<div class="card"><h2>Partenaires</h2><div class="table-wrap"><table class="table"><thead><tr><th>Partenaire</th><th>Secteur</th><th>Liste</th><th></th></tr></thead><tbody>
+    ${partners.map((p) => `<tr class="${p.id === unitEdit.id ? "sel" : ""}"><td><strong>${esc(p.name)}</strong><div class="small muted">${esc(PARTNER_TYPES[p.type].label)}</div></td><td class="small">${esc(p.sector)}</td>
+      <td class="small">${p.units.map(esc).join(" · ")}${isDefault(p) ? ` <span class="pill gris">par défaut</span>` : ` <span class="pill bleu">personnalisée</span>`}</td>
+      <td><button type="button" class="btn btn-sm" data-pick="${p.id}" ${p.id === unitEdit.id ? 'aria-pressed="true"' : ""}>Modifier</button></td></tr>`).join("") || `<tr><td colspan="4" class="empty">Aucun partenaire pour ce secteur.</td></tr>`}</tbody></table></div></div>`;
+  const editor = one ? `<form class="card sticky" id="own-f"><span class="eyebrow">${esc(PARTNER_TYPES[one.type].label)}</span><h2>${esc(UNIT_LABEL[one.type].list)} — ${esc(one.name)}</h2>
+      <div class="field"><label for="own-u">Une valeur par ligne</label><textarea id="own-u" rows="9">${esc(unitEdit.draft ?? one.units.join("\n"))}</textarea>
+      <div class="hint">Proposée dans le questionnaire (champ « ${esc(UNIT_LABEL[one.type].one)} ») et en filtre du tableau de bord. Retirer une valeur ne modifie pas les bilans déjà enregistrés.</div></div>
+      ${err ? `<div class="banner banner-err" role="alert">${esc(err)}</div>` : ""}
+      <div class="small muted" style="margin-bottom:.6rem">Bilans par valeur : ${one.units.map((u) => `${esc(u)} (${used(one, u)})`).join(" · ")}</div>
+      <div class="actions"><button class="btn btn-primary btn-sm" type="submit">Enregistrer</button><button type="button" class="btn btn-ghost btn-sm" id="own-reset">Reprendre la liste par défaut</button><button type="button" class="btn btn-ghost btn-sm" id="own-close">Fermer</button></div></form>`
+    : `<aside class="card sticky"><p class="empty">Choisissez « Modifier » sur un partenaire pour personnaliser sa liste.</p></aside>`;
+  el.innerHTML = `<div class="page-head"><div class="grow"><span class="eyebrow">Métadonnées</span><h1>Directions et régions des partenaires</h1><p class="small muted" style="margin:0">Les listes par défaut sont gérées par l'admin LAMIFI Business ; ici, Yodan personnalise la liste de chaque partenaire.</p></div></div>
+    <div class="split">${table}${editor}</div>`;
+  $$("[data-pick]", el).forEach((b) => b.addEventListener("click", () => { Object.assign(unitEdit, { id: b.dataset.pick, draft: null }); viewUnitLists(el, pids); }));
+  $("#own-close", el)?.addEventListener("click", () => { Object.assign(unitEdit, { id: null, draft: null }); viewUnitLists(el, pids); });
+  $("#own-reset", el)?.addEventListener("click", () => { $("#own-u", el).value = db.settings.defaultUnits[one.type].join("\n"); });
+  $("#own-f", el)?.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const text = $("#own-u", el).value, r = setPartnerUnits(one.id, text);
+    if (!r.ok) { unitEdit.draft = text; return viewUnitLists(el, pids, r.err); }
+    unitEdit.draft = null; toast(`Liste de ${esc(one.name)} enregistrée.`); viewUnitLists(el, pids);
+  });
+}
+
 /* ---------- Rôles du partenaire : inclure une fonctionnalité d'un rôle dans un autre ---------- */
 function viewPartnerRoles(el, p) {
   el.innerHTML = `<div class="page-head"><div class="grow"><span class="eyebrow">Rôles du partenaire</span><h1>${esc(p.name)}</h1><p class="small muted" style="margin:0">${esc(PARTNER_TYPES[p.type].label)} : rôles fixés par le type.</p></div></div>

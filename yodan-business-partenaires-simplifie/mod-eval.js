@@ -17,7 +17,7 @@ function fieldHtml(f, values, prefix) {
 function readFields(root, values) { $$("[data-field]", root).forEach((el) => { values[el.dataset.field] = el.value.trim(); }); return values; }
 const missingFields = (fields, values) => fields.filter((f) => f.required && fieldVisible(f, values) && !String(values[f.key] ?? "").trim()).map((f) => f.label.toLowerCase());
 /** Sépare identité (coffre identité) et profil (non identifiant, utilisé dans les statistiques). */
-const splitValues = (p, values) => ({ identity: Object.fromEntries(p.fields.filter((f) => f.pii).map((f) => [f.key, values[f.key] || ""])), profile: Object.fromEntries(p.fields.filter((f) => !f.pii && fieldVisible(f, values)).map((f) => [f.key, values[f.key] || ""])) });
+const splitValues = (p, values) => ({ identity: Object.fromEntries(fieldsOf(p).filter((f) => f.pii).map((f) => [f.key, values[f.key] || ""])), profile: Object.fromEntries(fieldsOf(p).filter((f) => !f.pii && fieldVisible(f, values)).map((f) => [f.key, values[f.key] || ""])) });
 const consentsHtml = (list, values, prefix) => list.map((c) => `<label class="check consent-row"><input type="checkbox" data-consent="${c.id}" id="${prefix}-${c.id}" ${values[c.id] ? "checked" : ""}> <span>${esc(c.label)}${c.required ? ' <span class="req">*</span>' : ""}</span></label>`).join("");
 function readConsents(root, values) { $$("[data-consent]", root).forEach((el) => { values[el.dataset.consent] = el.checked; }); return values; }
 /** Carte résultat : zone, libellé du test, message ; puis post-consentements et liens de la zone. */
@@ -140,15 +140,15 @@ function evWizard(el, st, scope, redraw) {
     $("#wz-next", body).addEventListener("click", () => { readConsents(body, st.consentsPre); if (pre.some((c) => c.required && !st.consentsPre[c.id])) { $("#pre-err", body).textContent = "Sans ce consentement, l'évaluation ne peut pas continuer."; return; } next(); });
   } else if (step === "Identité") {
     const known = look.path === "known";
-    const lockedPii = known ? p.fields.filter((f) => f.pii && st.values[f.key]) : [];
-    const shown = p.fields.filter((f) => !lockedPii.includes(f) && fieldVisible(f, st.values));
+    const lockedPii = known ? fieldsOf(p).filter((f) => f.pii && st.values[f.key]) : [];
+    const shown = fieldsOf(p).filter((f) => !lockedPii.includes(f) && fieldVisible(f, st.values));
     body.innerHTML = `<div class="row-between"><h2 style="margin:0">Identité</h2><span class="chip">📍 ${esc(st.agency)} (automatique)</span></div>
       ${lockedPii.length ? `<div class="card-flat"><strong>✓ Déjà enregistré</strong> <span class="muted small">(non modifiable ici)</span><div class="small">${lockedPii.map((f) => `${esc(f.label)} : ${esc(st.values[f.key])}`).join(" · ")}</div></div><p class="muted small">Vérifiez seulement ce qui peut avoir changé :</p>` : ""}
       <div class="grid-2" id="id-fields">${shown.map((f) => fieldHtml(f, st.values, "idf")).join("")}</div><div class="err" id="id-err" role="alert"></div>
       <div class="wizard-foot"><button type="button" class="btn btn-ghost" id="wz-back">← Retour</button><button type="button" class="btn btn-primary btn-lg" id="wz-next">Continuer vers le questionnaire</button></div>`;
-    $$("select[data-field]", body).forEach((s) => s.addEventListener("change", () => { readFields(body, st.values); if (p.fields.some((f) => f.showIf?.[0] === s.dataset.field)) redraw(); }));
+    $$("select[data-field]", body).forEach((s) => s.addEventListener("change", () => { readFields(body, st.values); if (fieldsOf(p).some((f) => f.showIf?.[0] === s.dataset.field)) redraw(); }));
     $("#wz-back", body).addEventListener("click", () => { readFields(body, st.values); st.wz--; redraw(); });
-    $("#wz-next", body).addEventListener("click", () => { readFields(body, st.values); const m = missingFields(p.fields, st.values); if (m.length) { $("#id-err", body).textContent = `Complétez : ${m.join(", ")}.`; return; } next(); });
+    $("#wz-next", body).addEventListener("click", () => { readFields(body, st.values); const m = missingFields(fieldsOf(p), st.values); if (m.length) { $("#id-err", body).textContent = `Complétez : ${m.join(", ")}.`; return; } next(); });
   } else if (step === "Questionnaire") {
     body.innerHTML = `${questionScreenHtml(st.test, st.q, st.answers)}<div class="wizard-foot"><button type="button" class="btn btn-ghost" id="q-prev">← ${st.q === 0 ? "Étape précédente" : "Question précédente"}</button><span class="small muted">Touches 0 à ${T.items[st.q].o.length - 1} · passage automatique</span></div>`;
     const choose = (v) => {
@@ -163,7 +163,7 @@ function evWizard(el, st, scope, redraw) {
     const missing = T.items.filter((_, i) => st.answers[i] == null).length;
     const name = `${st.values.prenom || ""} ${st.values.nom || ""}`.trim() || st.ids.id1;
     body.innerHTML = `<h2>Vérification avant envoi</h2>
-      ${look.path !== "followup" ? `<div class="card-flat"><div class="row-between"><strong>${esc(name)}</strong><button class="link-btn" type="button" data-edit="Identité">Modifier</button></div><div class="small muted">${esc(st.ids.id1)}${st.ids.id2 ? ` · ${esc(st.ids.id2)}` : ""} · ${p.fields.filter((f) => !f.pii && st.values[f.key]).map((f) => esc(st.values[f.key])).join(" · ")}</div>
+      ${look.path !== "followup" ? `<div class="card-flat"><div class="row-between"><strong>${esc(name)}</strong><button class="link-btn" type="button" data-edit="Identité">Modifier</button></div><div class="small muted">${esc(st.ids.id1)}${st.ids.id2 ? ` · ${esc(st.ids.id2)}` : ""} · ${fieldsOf(p).filter((f) => !f.pii && st.values[f.key]).map((f) => esc(st.values[f.key])).join(" · ")}</div>
         <div class="row-between small"><span>Consentements : ${consentsOf(p, "pre").filter((c) => st.consentsPre[c.id]).length} accepté(s)</span><button class="link-btn" type="button" data-edit="Consentements">Modifier</button></div></div>` : ""}
       <div class="recap-list">${T.items.map((it, i) => `<div class="recap-row"><span>${i + 1}. ${esc(it.t)}</span><span class="nowrap"><strong>${st.answers[i] != null ? esc(it.o.find(([v]) => v === st.answers[i])[1]) : "<span class='zone-ROUGE'>Sans réponse</span>"}</strong> <button class="link-btn" type="button" data-q="${i}">Modifier</button></span></div>`).join("")}</div>
       <div class="err" id="send-err" role="alert"></div>
@@ -205,7 +205,7 @@ function qrPatientDone() {
   if (!key) return toast("Aucun QR en attente.");
   const st = evx[key], p = partnerOf(st.partnerId), T = TESTS[st.test], r0 = rng(clock.now);
   const answers = T.items.map((it) => it.o[Math.floor(r0() * it.o.length)][0]);
-  const values = st.look.person ? { ...st.look.person.identity } : { nom: "Patient", prenom: "QR Démo", sexe: "Femme" };
+  const values = { ...(st.look.person ? st.look.person.identity : { nom: "Patient", prenom: "QR Démo", genre: "Femme" }), unite: p.units[Math.floor(r0() * p.units.length)] };
   const { identity, profile } = splitValues(p, values);
   const r = recordEvaluation({ partnerId: p.id, test: st.test, ids: st.ids, agency: st.agency, identity, profile, answers, consentsPre: { traitement: true }, mode: "qr", by: session.identityId });
   if (!r.ok) return toast(esc(r.err));
@@ -292,10 +292,10 @@ function pubCampaign(box, p) {
     return;
   }
   if (pub.step === "about") {
-    box.innerHTML = `${head}<form class="card" id="cp-about" novalidate><h2>Quelques informations</h2><p class="small muted">Elles servent uniquement aux statistiques anonymes (groupes d'au moins 5 personnes).</p><div class="grid-2">${p.fields.map((f) => fieldHtml(f, pub.values, "ab")).join("")}</div>${pub.err ? `<div class="banner banner-warn" role="alert">${esc(pub.err)}</div>` : ""}<button class="btn btn-orange btn-lg btn-block" type="submit">Envoyer mes réponses</button></form>`;
+    box.innerHTML = `${head}<form class="card" id="cp-about" novalidate><h2>Quelques informations</h2><p class="small muted">Elles servent uniquement aux statistiques anonymes (groupes d'au moins 5 personnes).</p><div class="grid-2">${fieldsOf(p).map((f) => fieldHtml(f, pub.values, "ab")).join("")}</div>${pub.err ? `<div class="banner banner-warn" role="alert">${esc(pub.err)}</div>` : ""}<button class="btn btn-orange btn-lg btn-block" type="submit">Envoyer mes réponses</button></form>`;
     $("#cp-about", box).addEventListener("submit", (e) => {
       e.preventDefault(); readFields(box, pub.values);
-      const m = missingFields(p.fields, pub.values); if (m.length) { pub.err = `Complétez : ${m.join(", ")}.`; return render(); }
+      const m = missingFields(fieldsOf(p), pub.values); if (m.length) { pub.err = `Complétez : ${m.join(", ")}.`; return render(); }
       const { identity, profile } = splitValues(p, pub.values);
       const r = submitParticipation(pub.participantId, { identity, profile, answers: pub.answers, consentsPre: pub.consents });
       if (!r.ok) { pub.err = r.err; return render(); }
@@ -333,12 +333,12 @@ function pubQr(box, p) {
   }
   if (!open && !pub.ids.id1) pub.ids = { id1: `DEMO-9${String(clock.now).slice(-5)}`, id2: "SIN-QR" };
   box.innerHTML = `<form class="card" id="qi" novalidate><h1>${esc(TESTS[test].desc)}</h1><p class="muted">Vos réponses sont confidentielles.</p>${consentsHtml(consentsOf(p, "pre"), pub.consents, "qi")}
-    ${open ? `<h2>Vous</h2><div class="grid-2">${p.fields.filter((f) => f.level === "person" || f.required).map((f) => fieldHtml(f, pub.values, "qf")).join("")}</div>` : ""}${pub.err ? `<div class="banner banner-warn" role="alert">${esc(pub.err)}</div>` : ""}
+    ${open ? `<h2>Vous</h2><div class="grid-2">${fieldsOf(p).filter((f) => f.level === "person" || f.required).map((f) => fieldHtml(f, pub.values, "qf")).join("")}</div>` : ""}${pub.err ? `<div class="banner banner-warn" role="alert">${esc(pub.err)}</div>` : ""}
     <button class="btn btn-orange btn-lg btn-block" type="submit">Commencer le questionnaire</button></form>`;
   $("#qi", box).addEventListener("submit", (e) => {
     e.preventDefault(); readConsents(box, pub.consents); readFields(box, pub.values);
     if (consentsOf(p, "pre").some((c) => c.required && !pub.consents[c.id])) { pub.err = "Sans ce consentement, le questionnaire ne peut pas commencer."; return render(); }
-    const m = open ? missingFields(p.fields.filter((f) => f.level === "person" || f.required), pub.values) : [];
+    const m = open ? missingFields(fieldsOf(p).filter((f) => f.level === "person" || f.required), pub.values) : [];
     if (m.length) { pub.err = `Complétez : ${m.join(", ")}.`; return render(); }
     pub.err = ""; pub.step = "questions"; pub.q = 0; render();
   });

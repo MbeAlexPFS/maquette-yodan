@@ -91,9 +91,34 @@ function demoActions() {
   if (k.endsWith(":evaluation") && Object.values(evx).some((s) => s.step === "qr" && !s.result)) acts.push(["Simuler : la personne a terminé", qrPatientDone]);
   if (k.startsWith("public") && ["questions", "form"].includes(pub.step)) acts.push(["Remplir : bien", () => fillPublicDemo(0.1)], ["Remplir : difficile", () => fillPublicDemo(0.9)]);
   if (k === "lamifi:create") acts.push(["Remplir l'exemple", () => {
-    Object.assign(cd, { name: "Entreprise Démo Gamma", fa: { name: "RH Gamma Démo", email: "rh@gamma.exemple.test" }, domainsText: "gamma.exemple.test" });
+    Object.assign(cd, { name: "Entreprise Démo Gamma", sector: db.settings.sectors.find((x) => x === "Télécoms et numérique") || db.settings.sectors[0], fa: { name: "RH Gamma Démo", email: "rh@gamma.exemple.test" }, domainsText: "gamma.exemple.test" });
     cd.cfg.campaign.domains = ["gamma.exemple.test"];
     render();
   }]);
   return acts;
 }
+
+/* ---------- Métadonnées : secteur d'activité, directions / régions ---------- */
+Object.assign(NOTES, {
+  "lamifi:sectors": N("Admin LAMIFI — secteurs d'activité", [
+    "Liste gérée par l'admin LAMIFI Business, une valeur par ligne ; choisie à la création d'un partenaire (champ obligatoire).",
+    "Métadonnée : sert uniquement de filtre (liste des partenaires, barre de l'admin Yodan). Jamais affichée au participant.",
+    "Un secteur utilisé par un partenaire ne peut pas être retiré ; doublons ignorés (casse et accents). Réglage tracé dans l'historique (system.sectors).",
+  ], ["La liste proposée par défaut convient-elle (10 secteurs) ? Faut-il pouvoir changer le secteur d'un partenaire après sa création ?"]),
+  "lamifi:units": N("Admin LAMIFI — directions et régions par défaut", [
+    "Deux listes par défaut, gérées par l'admin LAMIFI Business : directions (Entreprise) et structures géographiques (Association / mutuelle, ex. « Région du Centre »).",
+    "La liste du type est copiée à la création du partenaire. La modifier ne change pas les partenaires existants.",
+    "Réglage tracé (system.unit_defaults).",
+  ], ["Faut-il proposer « Je préfère ne pas répondre » (le champ est obligatoire aujourd'hui) ?"]),
+  "yodan:listes": N("Admin Yodan — directions et régions des partenaires", [
+    "Yodan personnalise seulement la liste de chaque partenaire (les listes par défaut sont chez l'admin LAMIFI).",
+    "Le tableau garde tous les partenaires du filtre ; « Modifier » ouvre l'éditeur à droite sans changer le filtre de la barre du haut. Badge « par défaut » ou « personnalisée ».",
+    "« Reprendre la liste par défaut » remplit l'éditeur avec la liste LAMIFI du type (à enregistrer).",
+    "La liste du partenaire alimente le champ « Direction » / « Région » du questionnaire et le filtre du tableau de bord. Retirer une valeur ne modifie pas les bilans déjà enregistrés. Réglage tracé (system.tenant_units).",
+  ], ["Le partenaire doit-il pouvoir gérer lui-même sa liste (ex. son Administrateur), ou seulement Yodan ?"]),
+});
+NOTES["lamifi:partners"].choix.push("Colonne et filtre « Secteur » ; nombre de directions / régions du partenaire.");
+NOTES["lamifi:create"].choix.push("Secteur d'activité obligatoire (liste LAMIFI). Les directions (entreprise) ou régions (mutuelle) par défaut (onglet LAMIFI « Directions et régions ») sont copiées à la création ; l'admin Yodan les personnalise ensuite.");
+NOTES["yodan:dashboard"].choix.push("Barre du haut : filtre « Secteur » (limite les partenaires de tous les onglets). Colonne « Direction / région » dans le détail des évaluations.");
+NOTES["partner:dashboard"].choix.push("Filtre « Direction » (entreprise) ou « Région » (mutuelle) et groupe correspondant dans « Par groupe » ; une direction / région de moins de 5 bilans est masquée.");
+NOTES["public:campagne"].choix.push("Nouveau champ obligatoire « Direction » (entreprise) ou « Région » (mutuelle) dans « Quelques informations », liste du partenaire ; sert uniquement aux statistiques anonymes.");

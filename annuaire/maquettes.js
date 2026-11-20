@@ -21,10 +21,10 @@ window.MAQUETTES = [
     dossier: "yodan-business-partenaires-simplifie",
     projet: "yodan-business",
     titre: "LAMIFI Business — partenaires (version simplifiée)",
-    description: "Dérivée de « partenaires par type » : types Entreprise et Association / mutuelle seulement, création de partenaire en un écran court, seul réglage = inclure une fonctionnalité d'un rôle dans un autre. Pas de prise en charge dans l'app : l'admin Yodan exporte la liste des personnes à prendre en charge (CSV) et passe le dossier à « Clos » quand le traitement est fini. Superviseur secondaire (ex-adjoint). Tests de cohérence inclus (?tests=1).",
-    ecrans: ["Connexion", "Partenaires", "Créer un partenaire", "Rôles (inclusions)", "Tableau de bord par test", "Campagnes", "Validation", "Suivi des agences", "Comptes", "À prendre en charge (export, clôture)", "Participant"],
+    description: "Dérivée de « partenaires par type » : types Entreprise et Association / mutuelle seulement, création de partenaire en un écran court, seul réglage = inclure une fonctionnalité d'un rôle dans un autre. Pas de prise en charge dans l'app : l'admin Yodan exporte la liste des personnes à prendre en charge (CSV) et passe le dossier à « Clos » quand le traitement est fini. Superviseur secondaire (ex-adjoint). Métadonnées de filtre : secteur d'activité (liste de l'admin LAMIFI) et directions (entreprise) / régions (mutuelle) par défaut configurables dans l'admin LAMIFI et personnalisables par partenaire dans l'admin Yodan, champ du questionnaire et filtre du tableau de bord. Tests de cohérence inclus (?tests=1).",
+    ecrans: ["Connexion", "Partenaires", "Créer un partenaire", "Secteurs d'activité", "Rôles (inclusions)", "Directions et régions", "Tableau de bord par test", "Campagnes", "Validation", "Suivi des agences", "Comptes", "À prendre en charge (export, clôture)", "Participant"],
     roles: ["Admin LAMIFI Business", "Admin Yodan", "Administrateur", "Superviseur principal", "Superviseur secondaire", "Validateur", "Participant"],
-    maj: "2026-11-19",
+    maj: "2026-11-20",
   },
   {
     dossier: "yodan-business-partenaires-types",
