@@ -17,7 +17,7 @@
     return n;
   };
   const norm = (s) => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
-  const fmtDate = (ymd) => (ymd ? new Date(ymd + "T12:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" }) : "");
+  const fmtDate = (ymd) => (ymd ? new Date(ymd + "T12:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "short" }) : "");
   const projet = (id) => PROJETS[id] || { nom: id, couleur: "#3C8FCB" };
   const byDossier = Object.fromEntries(MAQUETTES.map((m) => [m.dossier, m]));
 
@@ -29,28 +29,33 @@
     const p = projet(m.projet);
     const href = m.dossier + "/index.html";
     const h3 = el("h3", {}, [
+      el("a", { href, text: m.titre }),
       m.reference ? el("span", { class: "flag ref", text: "Référence" }) : null,
       m.remplacePar ? el("span", { class: "flag old", text: "Remplacée" }) : null,
-      document.createTextNode(m.titre),
+      m.tests ? el("span", { class: "flag tst", text: "Tests", title: "Tests de cohérence : ouvrir avec ?tests=1" }) : null,
     ]);
-    const tags = el("ul", { class: "tags", "aria-label": "Écrans et rôles" }, [
-      ...(m.ecrans || []).map((e) => el("li", { text: e })),
-      ...(m.roles || []).map((r) => el("li", { class: "role", text: "Rôle : " + r })),
-    ]);
+    const ne = (m.ecrans || []).length, nr = (m.roles || []).length;
+    const plural = (n, w) => n + " " + w + (n > 1 ? "s" : "");
+    const details = ne || nr ? el("details", { class: "more" }, [
+      el("summary", { text: [ne && plural(ne, "écran"), nr && plural(nr, "rôle")].filter(Boolean).join(" · ") }),
+      el("ul", { class: "tags", "aria-label": "Écrans et rôles" }, [
+        ...(m.ecrans || []).map((e) => el("li", { text: e })),
+        ...(m.roles || []).map((r) => el("li", { class: "role", text: r })),
+      ]),
+    ]) : null;
     const next = m.remplacePar && byDossier[m.remplacePar];
-    const actions = el("div", { class: "actions" }, [
-      el("a", { class: "btn primary", href, text: "Ouvrir" }),
-      el("a", { class: "btn ghost", href, target: "_blank", rel: "noopener", text: "Nouvel onglet ↗", "aria-label": "Ouvrir " + m.titre + " dans un nouvel onglet" }),
-    ]);
     return el("article", { class: "card" + (m.remplacePar ? " old" : ""), style: "--c:" + p.couleur }, [
-      el("p", { class: "proj" }, [el("span", { class: "dot", "aria-hidden": "true" }), document.createTextNode(p.nom)]),
+      el("p", { class: "proj" }, [
+        el("span", { class: "dot", "aria-hidden": "true" }),
+        document.createTextNode(p.nom),
+        el("span", { class: "date", text: fmtDate(m.maj), title: m.dossier + "/" }),
+      ]),
       h3,
-      el("p", { text: m.description || "" }),
-      next ? el("p", {}, [el("a", { class: "see-v", href: next.dossier + "/index.html", text: "→ Voir la version actuelle : " + next.titre })]) : null,
-      tags,
+      el("p", { class: "desc", text: m.description || "" }),
+      next ? el("p", {}, [el("a", { class: "see-v", href: next.dossier + "/index.html", text: "→ Version actuelle" })]) : null,
       el("div", { class: "meta" }, [
-        el("span", {}, [document.createTextNode("Mis à jour le " + fmtDate(m.maj) + " · "), el("code", { text: m.dossier + "/" })]),
-        actions,
+        details || el("span"),
+        el("a", { class: "btn ghost", href, target: "_blank", rel: "noopener", text: "↗", title: "Nouvel onglet", "aria-label": "Ouvrir " + m.titre + " dans un nouvel onglet" }),
       ]),
     ]);
   }
@@ -78,7 +83,7 @@
     );
     const hidden = MAQUETTES.filter((m) => m.remplacePar).length;
     $("#count").textContent = list.length + " maquette" + (list.length > 1 ? "s" : "") +
-      (!state.old && !q && !state.projet && hidden ? " · " + hidden + " version" + (hidden > 1 ? "s" : "") + " remplacée" + (hidden > 1 ? "s" : "") + " masquée" + (hidden > 1 ? "s" : "") : "");
+      (!state.old && !q && !state.projet && hidden ? " (+ " + hidden + " ancienne" + (hidden > 1 ? "s" : "") + ")" : "");
 
     const root = $("#list");
     if (!list.length) { root.replaceChildren(el("p", { class: "empty", text: "Aucune maquette ne correspond à la recherche." })); return; }

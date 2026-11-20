@@ -23,7 +23,7 @@ design/
 
 ## Ajouter ou modifier une maquette
 1. Créer `<projet>-<nom-maquette>/` à la racine (conventions de la section 9 du CLAUDE.md parent).
-2. L'inscrire dans `annuaire/maquettes.js` : `dossier`, `projet`, `titre`, `description`, `ecrans`, `roles` (facultatif), `maj` (date `AAAA-MM-JJ`). Ajouter le projet dans `PROJETS` s'il est nouveau (nom + couleur de charte).
+2. L'inscrire dans `annuaire/maquettes.js` : `dossier`, `projet`, `titre`, `description`, `ecrans`, `roles` (facultatif), `tests: true` si la maquette a des tests de cohérence, `maj` (date `AAAA-MM-JJ`). La `description` tient en **une phrase courte** (≈ 15 mots) : le détail va dans le panneau Notes UX de la maquette. Ajouter le projet dans `PROJETS` s'il est nouveau (nom + couleur de charte).
 3. Nouvelle version (`-v2`) : nouveau dossier + nouvelle entrée, et `remplacePar: "<dossier-v2>"` sur l'ancienne (elle est alors masquée par défaut dans l'annuaire).
 4. À chaque modification de l'annuaire, incrémenter le `?v=` des assets concernés dans `index.html` (section 10 du parent) ; idem pour les assets d'une maquette.
 5. Mettre à jour `maj` quand une maquette évolue de façon visible.
