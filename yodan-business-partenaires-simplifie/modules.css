@@ -136,6 +136,8 @@ details summary { cursor: pointer; font-weight: 600; color: var(--blue); margin:
 .bar-row.wide { grid-template-columns: minmax(160px, 2fr) 1fr 48px; }
 .bar-row > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tile small { font-family: var(--font-body); font-size: .8rem; color: var(--muted); }
+.grid-2 + .fold-card, .grid-2 + .card { margin-top: 1rem; }
+.tiles.participation .tile small { display: block; margin-top: .3rem; font-size: .78rem; }
 .period-title { min-width: 140px; text-align: center; text-transform: capitalize; }
 .toolbar input[type=date] { border: 1px solid #c9d3df; border-radius: 8px; padding: .3rem .4rem; }
 .modal-actions { margin-top: 1rem; border-top: 1px solid var(--border); padding-top: 1rem; }

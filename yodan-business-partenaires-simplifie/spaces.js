@@ -65,7 +65,7 @@ function renderPartnerList(el) {
   $$("[data-roles]", el).forEach((b) => b.addEventListener("click", () => rolesModal(partnerOf(b.dataset.roles), () => renderPartnerList(el))));
 }
 
-const newDraft = () => ({ name: "", type: "ENTREPRISE", sector: "", cfg: presetFor("ENTREPRISE"), domainsText: "", fa: { name: "", email: "" }, errors: {} });
+const newDraft = () => ({ name: "", type: "ENTREPRISE", sector: "", headcount: "", cfg: presetFor("ENTREPRISE"), domainsText: "", fa: { name: "", email: "" }, errors: {} });
 let cd = newDraft();
 /** Création par type, en un écran : nom, type, tests, domaines, premier compte. Inclusions : facultatives, repliées. */
 function renderCreatePartner(el) {
@@ -76,9 +76,10 @@ function renderCreatePartner(el) {
       <div class="section-title"><span class="num">1</span><h2>Partenaire</h2></div>
       <div class="field ${err("name")}"><label for="cp-name">Nom</label><input id="cp-name" value="${esc(cd.name)}" placeholder="Ex. : Entreprise Démo Gamma" autocomplete="off">${errBox(e, "name")}</div>
       <div class="field ${err("sector")}"><label for="cp-sector">Secteur d'activité</label><select id="cp-sector"><option value="">Choisir…</option>${db.settings.sectors.map((x) => `<option ${cd.sector === x ? "selected" : ""}>${esc(x)}</option>`).join("")}</select><div class="hint">Liste gérée dans l'onglet « Secteurs d'activité ». Sert uniquement de filtre.</div>${errBox(e, "sector")}</div>
+      <div class="field ${err("headcount")}"><label for="cp-head">Effectif total <span class="small muted">(salariés ou adhérents)</span></label><input id="cp-head" inputmode="numeric" value="${esc(cd.headcount)}" placeholder="Ex. 250" autocomplete="off" style="max-width:220px"><div class="hint">Daté du jour de création ; l'admin Yodan le met à jour ensuite (profil partenaire). Sert au taux de participation.</div>${errBox(e, "headcount")}</div>
       <div class="type-cards" role="radiogroup" aria-label="Type de partenaire">${Object.entries(PARTNER_TYPES).map(([k, t]) => `<button type="button" role="radio" aria-checked="${cd.type === k}" class="type-card ${cd.type === k ? "on" : ""}" data-type="${k}"><span class="ico">${t.ico}</span><strong>${esc(t.label)}</strong><span class="small">${esc(t.desc)}</span></button>`).join("")}</div>
 
-      <div class="banner banner-info small">${esc(UNIT_LABEL[cd.type].list)} : la liste par défaut (onglet « Directions et régions ») est copiée à la création (${db.settings.defaultUnits[cd.type].map(esc).join(", ") || "vide"}). Elle sert de champ « ${esc(UNIT_LABEL[cd.type].one)} » dans le questionnaire et de filtre dans le tableau de bord ; l'admin Yodan peut l'ajuster ensuite.</div>
+      <div class="banner banner-info small">${esc(UNIT_LABEL[cd.type].list)} : la liste par défaut (onglet « Directions et régions ») est copiée à la création (${db.settings.defaultUnits[cd.type].map(esc).join(", ") || "vide"}). Elle sert de champ « ${esc(UNIT_LABEL[cd.type].one)} » dans le questionnaire et de filtre dans le tableau de bord ; l'admin Yodan peut l'ajuster ensuite (onglet « Profil partenaire », avec l'effectif).</div>
       <div class="section-title"><span class="num">2</span><h2>Tests et campagnes</h2></div>
       <div class="field"><span class="lbl">Tests proposés</span><div class="chips-check">${TEST_KEYS.map((t) => `<label><input type="checkbox" data-test="${t}" ${c.tests.includes(t) ? "checked" : ""}> ${t} <span class="small muted">· ${TESTS[t].desc}</span></label>`).join("")}</div>${errBox(e, "tests")}</div>
       <label class="switch"><input type="checkbox" id="cp-pro" ${c.campaign.emailPro ? "checked" : ""}><span class="track"></span> Exiger une adresse e-mail professionnelle <span class="small muted">(facultatif)</span></label>
@@ -97,6 +98,7 @@ function renderCreatePartner(el) {
   const keep = () => {
     cd.name = $("#cp-name", el).value;
     cd.sector = $("#cp-sector", el).value;
+    cd.headcount = $("#cp-head", el).value;
     if ($("#cp-dom", el)) { cd.domainsText = $("#cp-dom", el).value; c.campaign.domains = parseDomains(cd.domainsText); }
     cd.fa = { name: $("#fa-name", el).value, email: $("#fa-email", el).value };
     cd.openInclude = $(".include-box", el).open;
@@ -108,7 +110,7 @@ function renderCreatePartner(el) {
   $("#cp-pro", el).addEventListener("change", (ev) => { keep(); c.campaign.emailPro = ev.target.checked; if (!c.campaign.emailPro) c.campaign.domains = []; else c.campaign.domains = parseDomains(cd.domainsText); again(); });
   $("#cp", el).addEventListener("submit", (ev) => {
     ev.preventDefault(); keep();
-    const r = createPartner({ name: cd.name, type: cd.type, sector: cd.sector, cfg: c, firstAccount: cd.fa });
+    const r = createPartner({ name: cd.name, type: cd.type, sector: cd.sector, headcount: cd.headcount, cfg: c, firstAccount: cd.fa });
     if (!r.ok) { cd.errors = r.errors; again(); $(".has-err input, .has-err textarea", el)?.focus(); return; }
     toast(`Partenaire « ${esc(r.partner.name)} » créé. Lien d'activation envoyé à ${esc(r.identity.email)} (${ROLE_LABEL[r.role]}).`);
     cd = newDraft();
@@ -241,7 +243,7 @@ const YODAN_TABS = [
   { id: "comptes", icon: "👥", label: "Comptes" },
   { id: "patients", icon: "🩺", label: "À prendre en charge" },
   { id: "partenaires", icon: "🧩", label: "Rôles du partenaire" },
-  { id: "listes", icon: "🗂", label: "Directions et régions" },
+  { id: "profil", icon: "🗂", label: "Profil partenaire" },
 ];
 RENDER.yodan = (root) => {
   const tab = tabOf("yodan", "dashboard");
@@ -270,7 +272,7 @@ RENDER.yodan = (root) => {
     comptes: () => viewAccounts(body, scope, "yodan"),
     patients: () => viewPatients(body, scope),
     partenaires: () => viewPartnerRoles(body, partnerOf(yo.partner)),
-    listes: () => viewUnitLists(body, pids),
+    profil: () => viewPartnerProfile(body, pids),
   })[tab]();
 };
 /* ---------- Directions (entreprise) / structures géographiques (mutuelle) ---------- */
@@ -291,38 +293,67 @@ function renderDefaultUnits(el, errs = {}) {
 }
 
 /**
- * Admin Yodan : personnalisation de la liste de chaque partenaire.
- * Le tableau garde tous les partenaires affichés ; « Modifier » ouvre l'éditeur à côté, sans toucher
- * au filtre partenaire de la barre du haut (sinon les autres partenaires disparaissaient du tableau).
+ * Admin Yodan : profil de chaque partenaire, en sous-onglets Secteur / Directions-régions / Effectif.
+ * Le tableau garde tous les partenaires affichés ; « Modifier » ouvre le profil à côté, sans toucher au filtre
+ * partenaire de la barre du haut (sinon les autres partenaires disparaissaient du tableau).
  */
-const unitEdit = { id: null, draft: null };
-function viewUnitLists(el, pids, err = "") {
+const PROFILE_TABS = [{ id: "secteur", label: "Secteur" }, { id: "unites", label: "Directions / régions" }, { id: "effectif", label: "Effectif" }];
+const unitEdit = { id: null, draft: null, sub: "secteur" };
+function viewPartnerProfile(el, pids, err = "", info = "") {
   const partners = pids.map(partnerOf);
   if (!partners.some((p) => p.id === unitEdit.id)) Object.assign(unitEdit, { id: partners.length === 1 ? partners[0].id : null, draft: null });
   const one = unitEdit.id ? partnerOf(unitEdit.id) : null;
   const used = (p, u) => db.evaluations.filter((e) => e.partnerId === p.id && e.profile.unite === u).length;
   const isDefault = (p) => JSON.stringify(p.units) === JSON.stringify(db.settings.defaultUnits[p.type]);
-  const table = `<div class="card"><h2>Partenaires</h2><div class="table-wrap"><table class="table"><thead><tr><th>Partenaire</th><th>Secteur</th><th>Liste</th><th></th></tr></thead><tbody>
+  const headTxt = (p) => { const n = headcountAt(p); return n ? `${n.toLocaleString("fr-FR")} ${HEADCOUNT_LABEL[p.type]}<div class="muted">depuis le ${fmtDate((p.headcounts || []).filter((x) => x.from <= todayIso()).at(-1).from)}</div>` : `<span class="pill orange">non renseigné</span>`; };
+  const table = `<div class="card"><h2>Partenaires</h2><div class="table-wrap"><table class="table"><thead><tr><th>Partenaire</th><th>Secteur</th><th>Directions / régions</th><th>Effectif</th><th></th></tr></thead><tbody>
     ${partners.map((p) => `<tr class="${p.id === unitEdit.id ? "sel" : ""}"><td><strong>${esc(p.name)}</strong><div class="small muted">${esc(PARTNER_TYPES[p.type].label)}</div></td><td class="small">${esc(p.sector)}</td>
-      <td class="small">${p.units.map(esc).join(" · ")}${isDefault(p) ? ` <span class="pill gris">par défaut</span>` : ` <span class="pill bleu">personnalisée</span>`}</td>
-      <td><button type="button" class="btn btn-sm" data-pick="${p.id}" ${p.id === unitEdit.id ? 'aria-pressed="true"' : ""}>Modifier</button></td></tr>`).join("") || `<tr><td colspan="4" class="empty">Aucun partenaire pour ce secteur.</td></tr>`}</tbody></table></div></div>`;
-  const editor = one ? `<form class="card sticky" id="own-f"><span class="eyebrow">${esc(PARTNER_TYPES[one.type].label)}</span><h2>${esc(UNIT_LABEL[one.type].list)} — ${esc(one.name)}</h2>
-      <div class="field"><label for="own-u">Une valeur par ligne</label><textarea id="own-u" rows="9">${esc(unitEdit.draft ?? one.units.join("\n"))}</textarea>
-      <div class="hint">Proposée dans le questionnaire (champ « ${esc(UNIT_LABEL[one.type].one)} ») et en filtre du tableau de bord. Retirer une valeur ne modifie pas les bilans déjà enregistrés.</div></div>
-      ${err ? `<div class="banner banner-err" role="alert">${esc(err)}</div>` : ""}
+      <td class="small">${p.units.length} ${isDefault(p) ? `<span class="pill gris">par défaut</span>` : `<span class="pill bleu">personnalisée</span>`}</td><td class="small">${headTxt(p)}</td>
+      <td><button type="button" class="btn btn-sm" data-pick="${p.id}" ${p.id === unitEdit.id ? 'aria-pressed="true"' : ""}>Modifier</button></td></tr>`).join("") || `<tr><td colspan="5" class="empty">Aucun partenaire pour ce secteur.</td></tr>`}</tbody></table></div></div>`;
+  const msg = `${err ? `<div class="banner banner-err" role="alert">${esc(err)}</div>` : ""}${info ? `<div class="banner banner-warn">${esc(info)}</div>` : ""}`;
+  const subBody = !one ? "" : {
+    secteur: `<form id="pf-f" data-kind="secteur"><div class="field"><label for="pf-sector">Secteur d'activité</label><select id="pf-sector">${db.settings.sectors.map((x) => `<option ${one.sector === x ? "selected" : ""}>${esc(x)}</option>`).join("")}</select>
+      <div class="hint">Liste gérée par l'admin LAMIFI Business. Sert uniquement de filtre (barre du haut, listes).</div></div>${msg}<div class="actions"><button class="btn btn-primary btn-sm" type="submit">Enregistrer</button></div></form>`,
+    unites: `<form id="pf-f" data-kind="unites"><div class="field"><label for="own-u">${esc(UNIT_LABEL[one.type].list)} — une valeur par ligne</label><textarea id="own-u" rows="9">${esc(unitEdit.draft ?? one.units.join("\n"))}</textarea>
+      <div class="hint">Proposée dans le questionnaire (champ « ${esc(UNIT_LABEL[one.type].one)} ») et en filtre du tableau de bord. Retirer une valeur ne modifie pas les bilans déjà enregistrés.</div></div>${msg}
       <div class="small muted" style="margin-bottom:.6rem">Bilans par valeur : ${one.units.map((u) => `${esc(u)} (${used(one, u)})`).join(" · ")}</div>
-      <div class="actions"><button class="btn btn-primary btn-sm" type="submit">Enregistrer</button><button type="button" class="btn btn-ghost btn-sm" id="own-reset">Reprendre la liste par défaut</button><button type="button" class="btn btn-ghost btn-sm" id="own-close">Fermer</button></div></form>`
-    : `<aside class="card sticky"><p class="empty">Choisissez « Modifier » sur un partenaire pour personnaliser sa liste.</p></aside>`;
-  el.innerHTML = `<div class="page-head"><div class="grow"><span class="eyebrow">Métadonnées</span><h1>Directions et régions des partenaires</h1><p class="small muted" style="margin:0">Les listes par défaut sont gérées par l'admin LAMIFI Business ; ici, Yodan personnalise la liste de chaque partenaire.</p></div></div>
+      <div class="actions"><button class="btn btn-primary btn-sm" type="submit">Enregistrer</button><button type="button" class="btn btn-ghost btn-sm" id="own-reset">Reprendre la liste par défaut</button></div></form>`,
+    effectif: (() => {
+      const pa = participationOf([one.id]);
+      const hist = [...(one.headcounts || [])].sort((a, b) => b.from.localeCompare(a.from));
+      return `<form id="pf-f" data-kind="effectif"><div class="row"><div class="field"><label for="pf-head">Effectif total (${HEADCOUNT_LABEL[one.type]})</label><input id="pf-head" inputmode="numeric" placeholder="Ex. 250" autocomplete="off"></div>
+      <div class="field"><label for="pf-from">À partir du</label><input id="pf-from" type="date" value="${todayIso()}" max="${todayIso()}"></div></div>
+      <div class="hint" style="margin:-.4rem 0 .6rem">Effectif daté : chaque campagne utilise l'effectif en vigueur à sa date de début. Sert uniquement au taux de participation (partenaire et Yodan) ; les statistiques restent calculées sur les personnes sélectionnées. Une saisie à la même date remplace la précédente.</div>${msg}
+      <div class="actions"><button class="btn btn-primary btn-sm" type="submit">Ajouter</button></div></form>
+      <h3 style="margin-top:1rem">Historique</h3>
+      <div class="table-wrap"><table class="table"><thead><tr><th>À partir du</th><th class="num-cell">Effectif</th><th>Saisi le</th><th></th></tr></thead><tbody>
+      ${hist.map((h) => `<tr><td>${fmtDate(h.from)}${headcountAt(one) === h.value && hist.find((x) => x.from <= todayIso()) === h ? ` <span class="pill vert">en vigueur</span>` : ""}</td><td class="num-cell">${h.value.toLocaleString("fr-FR")}</td><td class="small">${fmtDateTime(h.at)}</td><td><button type="button" class="link-btn small" data-hdel="${h.from}">Retirer</button></td></tr>`).join("") || `<tr><td colspan="4" class="empty">Effectif non renseigné.</td></tr>`}</tbody></table></div>
+      <div class="small muted" style="margin-top:.6rem">Campagnes commencées : ${pa.selected} personne(s) sélectionnée(s), ${pa.answered} ont répondu.</div>`;
+    })(),
+  }[unitEdit.sub];
+  const editor = one ? `<div class="card sticky"><span class="eyebrow">${esc(PARTNER_TYPES[one.type].label)}</span><h2>Profil — ${esc(one.name)}</h2>
+      <div class="subtabs" role="tablist" aria-label="Profil partenaire">${PROFILE_TABS.map((t) => `<button type="button" role="tab" data-psub="${t.id}" class="${unitEdit.sub === t.id ? "on" : ""}" aria-selected="${unitEdit.sub === t.id}">${esc(t.label)}</button>`).join("")}</div>
+      ${subBody}<div class="actions" style="margin-top:.6rem"><button type="button" class="btn btn-ghost btn-sm" id="pf-close">Fermer</button></div></div>`
+    : `<aside class="card sticky"><p class="empty">Choisissez « Modifier » sur un partenaire pour voir et modifier son profil (secteur, directions / régions, effectif).</p></aside>`;
+  el.innerHTML = `<div class="page-head"><div class="grow"><span class="eyebrow">Réglages partenaires</span><h1>Profil partenaire</h1><p class="small muted" style="margin:0">Métadonnées de filtre. Les listes de référence (secteurs, directions et régions par défaut) sont gérées par l'admin LAMIFI Business.</p></div></div>
     <div class="split">${table}${editor}</div>`;
-  $$("[data-pick]", el).forEach((b) => b.addEventListener("click", () => { Object.assign(unitEdit, { id: b.dataset.pick, draft: null }); viewUnitLists(el, pids); }));
-  $("#own-close", el)?.addEventListener("click", () => { Object.assign(unitEdit, { id: null, draft: null }); viewUnitLists(el, pids); });
+  const again = (e = "", i = "") => viewPartnerProfile(el, pids, e, i);
+  $$("[data-pick]", el).forEach((b) => b.addEventListener("click", () => { Object.assign(unitEdit, { id: b.dataset.pick, draft: null }); again(); }));
+  $$("[data-psub]", el).forEach((b) => b.addEventListener("click", () => { Object.assign(unitEdit, { sub: b.dataset.psub, draft: null }); again(); }));
+  $("#pf-close", el)?.addEventListener("click", () => { Object.assign(unitEdit, { id: null, draft: null }); again(); });
+  $$("[data-hdel]", el).forEach((b) => b.addEventListener("click", () => { const r = removeHeadcount(one.id, b.dataset.hdel); toast(r.ok ? "Valeur retirée." : esc(r.err)); again(); }));
   $("#own-reset", el)?.addEventListener("click", () => { $("#own-u", el).value = db.settings.defaultUnits[one.type].join("\n"); });
-  $("#own-f", el)?.addEventListener("submit", (e) => {
+  $("#pf-f", el)?.addEventListener("submit", (e) => {
     e.preventDefault();
-    const text = $("#own-u", el).value, r = setPartnerUnits(one.id, text);
-    if (!r.ok) { unitEdit.draft = text; return viewUnitLists(el, pids, r.err); }
-    unitEdit.draft = null; toast(`Liste de ${esc(one.name)} enregistrée.`); viewUnitLists(el, pids);
+    const kind = e.target.dataset.kind;
+    if (kind === "unites") {
+      const text = $("#own-u", el).value, r = setPartnerUnits(one.id, text);
+      if (!r.ok) { unitEdit.draft = text; return again(r.err); }
+      unitEdit.draft = null; toast(`Liste de ${esc(one.name)} enregistrée.`); return again();
+    }
+    const r = kind === "secteur" ? setPartnerSector(one.id, $("#pf-sector", el).value) : setHeadcount(one.id, $("#pf-head", el).value, $("#pf-from", el).value);
+    if (!r.ok) return again(r.err);
+    toast(kind === "secteur" ? "Secteur enregistré." : "Effectif enregistré."); again("", r.warn || "");
   });
 }
 

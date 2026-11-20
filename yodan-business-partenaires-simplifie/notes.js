@@ -78,6 +78,11 @@ function demoHints() {
     "Mutuelle Horizon : Administrateur <code>admin@horizon.exemple.test</code> · Superviseur principal <code>principal@horizon.exemple.test</code> · Superviseur secondaire <code>secondaire@horizon.exemple.test</code> · Validateur <code>validation@horizon.exemple.test</code>",
     "Activation : e-mail « Activez votre compte » de <code>nouveau.validateur@horizon.exemple.test</code>.", ...common,
   ];
+  if (k === "partner:dashboard" || k === "yodan:dashboard" || k === "yodan:profil") return [
+    "Effectif daté de la démo : Alpha 110 → 120 → 125 salariés · Beta 80 → 85 salariés · Horizon 380 → 400 adhérents.",
+    "Voir « Participation par campagne » (Toutes les campagnes) : chaque campagne affiche l'effectif en vigueur à son début ; la tuile Effectif montre celui du jour. Même bloc sur chaque test (BSPA, KARASEK, COPSOQ…).",
+    "Profil partenaire (admin Yodan) → Effectif : historique des valeurs ; ajoutez une valeur datée puis revenez au tableau de bord.", ...common,
+  ];
   if (k === "yodan:patients") return ["L'export télécharge un vrai fichier CSV contenant uniquement les données fictives de la démo.", ...common];
   if (k === "public:campagne") return ["Entreprise Alpha exige l'e-mail pro (<code>@alpha.exemple.test</code>, gmail refusé) ; Beta et la mutuelle acceptent toute adresse.", ...common];
   if (k.startsWith("yodan")) return ["Rapport renvoyé : ouvrez l'e-mail « Votre rapport est disponible » dans la boîte 🛠 ; une 2e ouverture du même lien est refusée.", ...common];
@@ -91,7 +96,7 @@ function demoActions() {
   if (k.endsWith(":evaluation") && Object.values(evx).some((s) => s.step === "qr" && !s.result)) acts.push(["Simuler : la personne a terminé", qrPatientDone]);
   if (k.startsWith("public") && ["questions", "form"].includes(pub.step)) acts.push(["Remplir : bien", () => fillPublicDemo(0.1)], ["Remplir : difficile", () => fillPublicDemo(0.9)]);
   if (k === "lamifi:create") acts.push(["Remplir l'exemple", () => {
-    Object.assign(cd, { name: "Entreprise Démo Gamma", sector: db.settings.sectors.find((x) => x === "Télécoms et numérique") || db.settings.sectors[0], fa: { name: "RH Gamma Démo", email: "rh@gamma.exemple.test" }, domainsText: "gamma.exemple.test" });
+    Object.assign(cd, { name: "Entreprise Démo Gamma", headcount: "180", sector: db.settings.sectors.find((x) => x === "Télécoms et numérique") || db.settings.sectors[0], fa: { name: "RH Gamma Démo", email: "rh@gamma.exemple.test" }, domainsText: "gamma.exemple.test" });
     cd.cfg.campaign.domains = ["gamma.exemple.test"];
     render();
   }]);
@@ -110,15 +115,26 @@ Object.assign(NOTES, {
     "La liste du type est copiée à la création du partenaire. La modifier ne change pas les partenaires existants.",
     "Réglage tracé (system.unit_defaults).",
   ], ["Faut-il proposer « Je préfère ne pas répondre » (le champ est obligatoire aujourd'hui) ?"]),
-  "yodan:listes": N("Admin Yodan — directions et régions des partenaires", [
-    "Yodan personnalise seulement la liste de chaque partenaire (les listes par défaut sont chez l'admin LAMIFI).",
-    "Le tableau garde tous les partenaires du filtre ; « Modifier » ouvre l'éditeur à droite sans changer le filtre de la barre du haut. Badge « par défaut » ou « personnalisée ».",
-    "« Reprendre la liste par défaut » remplit l'éditeur avec la liste LAMIFI du type (à enregistrer).",
-    "La liste du partenaire alimente le champ « Direction » / « Région » du questionnaire et le filtre du tableau de bord. Retirer une valeur ne modifie pas les bilans déjà enregistrés. Réglage tracé (system.tenant_units).",
-  ], ["Le partenaire doit-il pouvoir gérer lui-même sa liste (ex. son Administrateur), ou seulement Yodan ?"]),
+  "yodan:profil": N("Admin Yodan — profil partenaire", [
+    "Un seul onglet de réglages par partenaire, en trois sous-onglets : Secteur, Directions / régions, Effectif. Les listes de référence restent chez l'admin LAMIFI.",
+    "Le tableau garde tous les partenaires des filtres ; « Modifier » ouvre le profil à droite sans changer le filtre de la barre du haut.",
+    "Secteur : choisi dans la liste LAMIFI (tracé system.tenant_sector).",
+    "Directions / régions : liste copiée depuis le modèle LAMIFI, personnalisable ; « Reprendre la liste par défaut ». Retirer une valeur ne modifie pas les bilans (system.tenant_units).",
+    "Effectif total (salariés ou adhérents) DATÉ : nombre entier + « à partir du » (pas dans le futur) ; une saisie à la même date remplace la précédente ; historique avec « Retirer » pour une erreur de saisie (system.tenant_headcount).",
+    "Chaque campagne utilise l'effectif en vigueur à sa date de début ; « Toutes les campagnes » utilise l'effectif du jour. Sert uniquement au taux de participation ; avertissement si moins de personnes que déjà sélectionnées depuis cette date.",
+    "Validé : le profil est géré par l'admin Yodan pour l'instant (le partenaire ne le modifie pas).",
+  ], ["Plus tard : faut-il ouvrir la gestion du profil au partenaire (ex. son Administrateur) ?"]),
 });
 NOTES["lamifi:partners"].choix.push("Colonne et filtre « Secteur » ; nombre de directions / régions du partenaire.");
 NOTES["lamifi:create"].choix.push("Secteur d'activité obligatoire (liste LAMIFI). Les directions (entreprise) ou régions (mutuelle) par défaut (onglet LAMIFI « Directions et régions ») sont copiées à la création ; l'admin Yodan les personnalise ensuite.");
 NOTES["yodan:dashboard"].choix.push("Barre du haut : filtre « Secteur » (limite les partenaires de tous les onglets). Colonne « Direction / région » dans le détail des évaluations.");
 NOTES["partner:dashboard"].choix.push("Filtre « Direction » (entreprise) ou « Région » (mutuelle) et groupe correspondant dans « Par groupe » ; une direction / région de moins de 5 bilans est masquée.");
 NOTES["public:campagne"].choix.push("Nouveau champ obligatoire « Direction » (entreprise) ou « Région » (mutuelle) dans « Quelques informations », liste du partenaire ; sert uniquement aux statistiques anonymes.");
+NOTES["partner:dashboard"].choix.push("En tête : Participation (effectif total → sélectionnés pour une campagne → ont répondu, en % de l'effectif). Chiffres agrégés seulement, jamais la liste des participants ; masqués sous 5. Les statistiques restent calculées sur les sélectionnés qui ont répondu. Pas affiché au Superviseur secondaire (effectif de tout le partenaire).");
+NOTES["yodan:dashboard"].choix.push("Même bandeau Participation en tête du tableau de bord ; « effectif incomplet » si un partenaire affiché n'a pas renseigné son effectif.");
+NOTES["yodan:campagnes"].choix.push("La liste des participants reste réservée à Yodan ; le partenaire ne voit que les totaux agrégés du bandeau Participation de son tableau de bord.");
+NOTES["lamifi:create"].choix.push("Effectif total OBLIGATOIRE dès la création (salariés ou adhérents), daté du jour de création ; l'admin Yodan le met à jour ensuite dans le profil partenaire.");
+NOTES["partner:dashboard"].choix.push("Effectif daté : la tuile indique « en vigueur à ce jour » ou « au début de la campagne (date) » selon la campagne choisie.");
+NOTES["partner:dashboard"].choix.push("Le bloc Participation s'affiche sur tous les tests (BSPA, KARASEK, COPSOQ, WHO-5), avec le tableau « Participation par campagne » (effectif au début de chaque campagne).");
+NOTES["partner:dashboard"].choix.push("Tous les tests ont le même tableau de bord commun : filtres Direction / Région et Campagne, Participation, Par groupe (direction / région, genre, âge, ancienneté), Comparaison des campagnes. Seuls les indicateurs issus du questionnaire changent (BSPA : dimensions et signaux ; autres tests : répartition, évolution, agences).");
+NOTES["partner:dashboard"].choix.push("Moins de blocs : les tableaux de même format (direction / région, genre, âge, ancienneté, et agence pour les autres tests) sont réunis dans un seul bloc « Par groupe » avec un sélecteur « Regrouper par ». Bouton « Tout replier / Tout déplier » au début de la barre de filtres.");

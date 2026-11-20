@@ -265,7 +265,8 @@ function dashboardModel(partnerIds, test, censor, agencies = null) {
 function unitsOf(pids) {
   const out = [];
   pids.forEach((id) => partnerOf(id).units.forEach((u) => { if (!out.includes(u)) out.push(u); }));
-  initials(pids, "BSPA").forEach((e) => { const u = e.profile.unite; if (u && !out.includes(u)) out.push(u); });
+  // Valeurs déjà présentes dans les bilans de tous les tests (une valeur retirée de la liste reste filtrable).
+  db.evaluations.filter((e) => pids.includes(e.partnerId)).forEach((e) => { const u = e.profile.unite; if (u && !out.includes(u)) out.push(u); });
   return out;
 }
 /** Libellé du filtre selon les types affichés (« Direction », « Région » ou « Direction / région »). */
@@ -273,18 +274,58 @@ function unitLabelOf(pids) {
   const types = [...new Set(pids.map((id) => partnerOf(id).type))];
   return types.length === 1 ? UNIT_LABEL[types[0]] : { one: "Direction / région", list: "Directions / régions", all: "Toutes les directions / régions" };
 }
-/** Tableau de bord BSPA (repris du tableau de bord RH : agrégé, seuil de 5). unit = filtre direction / région. */
-function bspaModel(pids, censor, campaignId = "all", agencies = null, unit = "all") {
-  const base = dashboardModel(pids, "BSPA", censor, agencies);
-  const evs = initials(pids, "BSPA", agencies).filter((e) => (campaignId === "all" || e.campaignId === campaignId) && (unit === "all" || e.profile.unite === unit));
+/**
+ * Participation (en tête du tableau de bord) : effectif total → sélectionnés (invités aux campagnes) → ont répondu.
+ * Agrégé seulement (jamais la liste des participants). Les statistiques du tableau de bord restent calculées sur
+ * les personnes sélectionnées qui ont répondu. Effectif inconnu si un partenaire affiché ne l'a pas renseigné.
+ */
+function participationOf(pids, campaignId = "all", test = "BSPA") {
+  // Effectif de référence : celui en vigueur au début de la campagne choisie, sinon celui du jour.
+  const asOf = campaignId === "all" ? todayIso() : campaignOf(campaignId)?.start || todayIso();
+  const camps = db.campaigns.filter((c) => pids.includes(c.partnerId) && c.test === test && campaignState(c) !== "AVENIR" && (campaignId === "all" || c.id === campaignId));
+  const ps = db.participants.filter((x) => camps.some((c) => c.id === x.campaignId));
+  // Une personne sélectionnée pour deux campagnes compte une fois (sauf si une seule campagne est choisie).
+  const selected = new Set(ps.map((x) => `${campaignOf(x.campaignId).partnerId}|${x.email}`)).size;
+  const answered = new Set(ps.filter((x) => x.completedAt).map((x) => `${campaignOf(x.campaignId).partnerId}|${x.email}`)).size;
+  const heads = pids.map((id) => headcountAt(partnerOf(id), asOf));
+  const headcount = heads.every((h) => Number.isInteger(h) && h > 0) ? heads.reduce((a, b) => a + b, 0) : null;
+  const pct = (n, d) => (d ? Math.round((n / d) * 1000) / 10 : null);
+  return { asOf, headcount, selected, answered, selectedPct: pct(selected, headcount), answeredPct: pct(answered, headcount), answeredOfSelected: pct(answered, selected) };
+}
+/** Participation de chaque campagne commencée d'un test, avec l'effectif en vigueur à son début (effectif daté). */
+const participationByCampaign = (pids, test) => db.campaigns.filter((c) => pids.includes(c.partnerId) && c.test === test && campaignState(c) !== "AVENIR")
+  .sort((a, b) => a.start.localeCompare(b.start)).map((c) => ({ campaign: c, ...participationOf([c.partnerId], c.id, test) }));
+/**
+ * Partie commune à TOUS les tests (BSPA, KARASEK, COPSOQ, WHO-5) : mêmes filtres (direction / région, campagne),
+ * mêmes groupes (direction / région, genre, âge, ancienneté) et même comparaison des campagnes.
+ * Seul ce qui découle du questionnaire (indicateurs, dimensions) diffère d'un test à l'autre.
+ */
+function commonModel(pids, test, censor, campaignId = "all", agencies = null, unit = "all") {
+  const camps = db.campaigns.filter((c) => pids.includes(c.partnerId) && c.test === test && campaignState(c) !== "AVENIR");
+  const cid = campaignId === "all" || camps.some((c) => c.id === campaignId) ? campaignId : "all";
+  const evs = initials(pids, test, agencies).filter((e) => (cid === "all" || e.campaignId === cid) && (unit === "all" || e.profile.unite === unit));
   const n = evs.length;
-  const prof = ZONES.map((z) => evs.filter((e) => e.zone === z).length);
-  const dims = Object.fromEntries(BSPA_DIMS.map((k) => [k, n ? Math.round(evs.reduce((s, e) => s + e.dims[k].pct, 0) / n) : 0]));
-  const unitRows = unitsOf(pids).filter((u) => unit === "all" || u === unit).map((u) => { const sub = evs.filter((e) => e.profile.unite === u); return { group: u, total: sub.length, zones: countBy(sub, (e) => e.zone, ZONES) }; });
-  const by = [{ label: unitLabelOf(pids).one, rows: unitRows }, ...BSPA_DEMO.map((f) => ({ label: f.label, rows: f.options.map((o) => { const sub = evs.filter((e) => e.profile[f.key] === o); return { group: o === "Je préfère ne pas répondre" ? "Non précisé" : o, total: sub.length, zones: countBy(sub, (e) => e.zone, ZONES) }; }) }))];
-  const camps = db.campaigns.filter((c) => pids.includes(c.partnerId) && c.test === "BSPA" && campaignState(c) !== "AVENIR");
-  const compare = camps.map((c) => { const sub = evs.filter((e) => e.campaignId === c.id); return { id: c.id, name: c.name, total: sub.length, prof: ZONES.map((z) => sub.filter((e) => e.zone === z).length), wellbeing: sub.length ? Math.round(sub.reduce((s, e) => s + e.dims.A.pct, 0) / sub.length) : 0 }; });
-  return { ...base, total: n, tooSmall: censor && n < MIN_GROUP, prof, dims, by, alerts: evs.filter((e) => e.dims.E.zone === "ROUGE").length, compare, campaigns: camps };
+  const zonesOf = (rows) => countBy(rows, (e) => e.zone, ZONES);
+  const unitRows = unitsOf(pids).filter((u) => unit === "all" || u === unit).map((u) => { const sub = evs.filter((e) => e.profile.unite === u); return { group: u, total: sub.length, zones: zonesOf(sub) }; });
+  const by = [{ label: unitLabelOf(pids).one, rows: unitRows }, ...BSPA_DEMO.map((f) => ({ label: f.label, rows: f.options.map((o) => { const sub = evs.filter((e) => e.profile[f.key] === o); return { group: o === "Je préfère ne pas répondre" ? "Non précisé" : o, total: sub.length, zones: zonesOf(sub) }; }) }))];
+  const compare = camps.map((c) => { const sub = evs.filter((e) => e.campaignId === c.id); return { id: c.id, name: c.name, partnerId: c.partnerId, total: sub.length, prof: ZONES.map((z) => sub.filter((e) => e.zone === z).length), evs: sub }; });
+  return { test, censor, campaignId: cid, evs, total: n, tooSmall: censor && n < MIN_GROUP, prof: ZONES.map((z) => evs.filter((e) => e.zone === z).length), zones: zonesOf(evs), by, compare, campaigns: camps };
+}
+/** Tableau de bord BSPA : partie commune + dimensions, signaux d'alerte et bien-être moyen par campagne. */
+function bspaModel(pids, censor, campaignId = "all", agencies = null, unit = "all") {
+  const m = commonModel(pids, "BSPA", censor, campaignId, agencies, unit);
+  const n = m.total;
+  const dims = Object.fromEntries(BSPA_DIMS.map((k) => [k, n ? Math.round(m.evs.reduce((s, e) => s + e.dims[k].pct, 0) / n) : 0]));
+  m.compare.forEach((c) => { c.wellbeing = c.total ? Math.round(c.evs.reduce((s, e) => s + e.dims.A.pct, 0) / c.total) : 0; });
+  return { ...m, dims, alerts: m.evs.filter((e) => e.dims.E.zone === "ROUGE").length };
+}
+/** Autres tests (KARASEK, COPSOQ, WHO-5) : partie commune + répartition, évolution hebdomadaire et agences. */
+function testModel(pids, test, censor, campaignId = "all", agencies = null, unit = "all") {
+  const m = commonModel(pids, test, censor, campaignId, agencies, unit);
+  const agencyNames = [...new Set(m.evs.map((e) => e.agency))].sort();
+  const byAgency = agencyNames.map((a) => { const sub = m.evs.filter((e) => e.agency === a); return { agency: a, total: sub.length, zones: countBy(sub, (e) => e.zone, ZONES) }; });
+  const weekly = weeksBack(12).map((w) => { const sub = m.evs.filter((e) => e.date >= w && e.date < addDays(w, 7)); return { week: w, total: sub.length, zones: countBy(sub, (e) => e.zone, ZONES) }; });
+  return { ...m, byAgency, weekly };
 }
 
 /* =====================================================================

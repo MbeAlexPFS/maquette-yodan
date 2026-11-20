@@ -25,7 +25,7 @@ function runTests() {
   const today = () => todayIso();
   const input = (type, over = {}) => {
     const cfg = presetFor(type); cfg.campaign.domains = ["gamma.exemple.test"];
-    return { name: `Test ${type} ${Math.random().toString(36).slice(2, 6)}`, type, sector: db.settings.sectors[0], cfg, firstAccount: { name: "Titulaire Démo", email: `titulaire.${type.toLowerCase()}@gamma.exemple.test` }, ...over };
+    return { name: `Test ${type} ${Math.random().toString(36).slice(2, 6)}`, type, sector: db.settings.sectors[0], headcount: "250", cfg, firstAccount: { name: "Titulaire Démo", email: `titulaire.${type.toLowerCase()}@gamma.exemple.test` }, ...over };
   };
   const activate = (i) => Object.assign(i, { password: DEMO_PASSWORD, activatedAt: clock.now, token: null });
   const bilan = (p, id1, level, agency) => recordEvaluation({ partnerId: p.id, test: "BSPA", ids: { id1 }, agency: agency || p.agencies[0], identity: { prenom: "Règle", nom: "Test" }, profile: { genre: "Femme", unite: p.units[0] }, answers: bspaAnswers(level, rng(Math.round(level * 100) + 1)), consentsPre: { traitement: true } });
@@ -315,18 +315,19 @@ function runTests() {
   test("Directions / régions · listes par défaut chez l'admin LAMIFI ; l'admin Yodan personnalise seulement par partenaire", () => {
     const lam = document.createElement("div"); renderDefaultUnits(lam);
     eq($$("[data-def]", lam).map((f) => f.dataset.def), ["ENTREPRISE", "MUTUELLE"], "éditeurs LAMIFI");
-    const yod = document.createElement("div"); viewUnitLists(yod, db.partners.map((p) => p.id));
+    const yod = document.createElement("div"); viewPartnerProfile(yod, db.partners.map((p) => p.id));
     assert(!$("[data-def]", yod), "liste par défaut modifiable côté Yodan");
     assert($$("[data-pick]", yod).length === db.partners.length, "un bouton Modifier par partenaire");
   });
   test("Bug corrigé · « Modifier » la liste d'un partenaire garde tous les partenaires dans le tableau et ne change pas le filtre", () => {
     const pids = db.partners.map((p) => p.id), box = document.createElement("div"), keepFilter = yo.partner;
-    viewUnitLists(box, pids);
+    viewPartnerProfile(box, pids);
     $(`[data-pick="${MUT().id}"]`, box).click();
+    $('[data-psub="unites"]', box).click();
     db.partners.forEach((p) => assert(box.textContent.includes(p.name), `${p.name} a disparu du tableau`));
     assert($("#own-u", box) && $("#own-u", box).value === MUT().units.join("\n"), "éditeur de la mutuelle");
     eq(yo.partner, keepFilter, "filtre partenaire modifié");
-    $("#own-u", box).value = "Région du Centre\nRégion du Sud"; $("#own-f", box).dispatchEvent(new Event("submit", { cancelable: true }));
+    $("#own-u", box).value = "Région du Centre\nRégion du Sud"; $("#pf-f", box).dispatchEvent(new Event("submit", { cancelable: true }));
     eq(MUT().units, ["Région du Centre", "Région du Sud"], "enregistrement");
     db.partners.forEach((p) => assert(box.textContent.includes(p.name), `${p.name} a disparu après enregistrement`));
     eq(ALPHA().units, db.settings.defaultUnits.ENTREPRISE, "autre partenaire modifié");
@@ -357,6 +358,163 @@ function runTests() {
     eq(inSector(ALPHA().sector), [ALPHA().id], "secteur Alpha");
     assert(!db.outbox.some((m) => JSON.stringify(m).includes(ALPHA().units[0])), "direction dans un e-mail");
     assert(!db.audit.some((a) => a.action.startsWith("evaluation") && JSON.stringify(a.details).includes(ALPHA().units[0])), "direction dans l'historique d'un bilan");
+  });
+
+  /* ---------- Profil partenaire (admin Yodan) et participation ---------- */
+  test("Profil partenaire · un onglet Yodan avec sous-onglets Secteur / Directions-régions / Effectif ; tous les partenaires restent listés", () => {
+    eq(YODAN_TABS.filter((t) => ["profil", "listes"].includes(t.id)).map((t) => t.id), ["profil"], "un seul onglet");
+    const box = document.createElement("div"), pids = db.partners.map((p) => p.id);
+    viewPartnerProfile(box, pids); $(`[data-pick="${ALPHA().id}"]`, box).click();
+    eq($$("[data-psub]", box).map((b) => b.dataset.psub), ["secteur", "unites", "effectif"], "sous-onglets");
+    ["unites", "effectif", "secteur"].forEach((sub) => { $(`[data-psub="${sub}"]`, box).click(); db.partners.forEach((p) => assert(box.textContent.includes(p.name), `${sub} : ${p.name} a disparu`)); });
+  });
+  test("Profil partenaire · secteur modifiable par Yodan, seulement dans la liste LAMIFI ; tracé", () => {
+    assert(!setPartnerSector(ALPHA().id, "Secteur inventé").ok, "hors liste");
+    assert(setPartnerSector(ALPHA().id, "Industrie").ok && ALPHA().sector === "Industrie", "enregistré");
+    assert(db.audit.some((a) => a.action === "system.tenant_sector" && a.partnerId === ALPHA().id), "tracé");
+  });
+  test("Effectif · nombre entier de 1 à 1 000 000, daté (pas dans le futur) ; même date = remplacement ; tracé ; avertissement si moins que les sélectionnés", () => {
+    ["0", "-3", "12,5", "abc", "2000000", ""].forEach((x) => assert(!setHeadcount(ALPHA().id, x).ok, `« ${x} » accepté`));
+    assert(!setHeadcount(ALPHA().id, "100", addDays(todayIso(), 1)).ok, "date future acceptée");
+    assert(!setHeadcount(ALPHA().id, "100", "pas-une-date").ok, "date invalide acceptée");
+    const before = ALPHA().headcounts.length;
+    assert(setHeadcount(ALPHA().id, " 1 250 ").ok && headcountAt(ALPHA()) === 1250, "espaces ignorés");
+    assert(setHeadcount(ALPHA().id, "1300").ok && headcountAt(ALPHA()) === 1300, "même date");
+    eq(ALPHA().headcounts.length, before + 1, "une seule valeur par date");
+    assert(setHeadcount(ALPHA().id, "3", todayIso()).warn, "avertissement absent");
+    assert(removeHeadcount(ALPHA().id, todayIso()).ok && ALPHA().headcounts.length === before, "retrait");
+    assert(db.audit.filter((a) => a.action === "system.tenant_headcount").length >= 4, "tracé");
+  });
+  test("Effectif · daté : chaque campagne utilise l'effectif en vigueur à son début ; « toutes les campagnes » = effectif du jour", () => {
+    const a = ALPHA(), old = db.campaigns.find((c) => c.partnerId === a.id && c.name === "Bilan du printemps 2026"), cur = db.campaigns.find((c) => c.partnerId === a.id && c.name === "Bilan annuel 2026");
+    eq([headcountAt(a, old.start), headcountAt(a, cur.start), headcountAt(a)], [110, 120, 125], "valeurs de la démo");
+    eq(participationOf([a.id], old.id).headcount, 110, "ancienne campagne");
+    eq(participationOf([a.id], cur.id).headcount, 120, "campagne en cours");
+    eq(participationOf([a.id]).headcount, 125, "effectif du jour");
+    eq(participationOf([a.id]).asOf, todayIso(), "toutes les campagnes");
+    eq(headcountAt(a, addDays(old.start, -400)), null, "avant toute saisie = non renseigné");
+  });
+  test("Effectif · obligatoire à la création du partenaire, daté du jour de création", () => {
+    assert(validatePartner(input("ENTREPRISE", { headcount: "abc" })).headcount, "effectif invalide accepté");
+    ["", "  ", undefined].forEach((x) => assert(validatePartner(input("ENTREPRISE", { headcount: x })).headcount, `effectif « ${x} » accepté`));
+    assert(!createPartner(input("ENTREPRISE", { headcount: "" })).ok, "création sans effectif");
+    db.partners.forEach((p) => assert(headcountAt(p) != null, `${p.name} sans effectif`));
+    const avec = createPartner(input("MUTUELLE", { headcount: "2 400" })).partner;
+    eq(avec.headcounts.map((h) => [h.value, h.from]), [[2400, todayIso()]], "effectif saisi"); eq(headcountAt(avec), 2400, "en vigueur");
+  });
+  test("Participation · effectif ≥ sélectionnés ≥ ont répondu ; taux = rapport à l'effectif ; inconnu si effectif non renseigné", () => {
+    db.partners.forEach((p) => {
+      const pa = participationOf([p.id]), h = headcountAt(p);
+      assert(pa.answered <= pa.selected, `${p.name} répondu > sélectionnés`);
+      assert(h && pa.selected <= h, `${p.name} effectif de démo trop petit`);
+      eq(pa.answeredPct, Math.round((pa.answered / h) * 1000) / 10, `${p.name} taux`);
+    });
+    ALPHA().headcounts = [];
+    const pa = participationOf([ALPHA().id]); eq([pa.headcount, pa.selectedPct, pa.answeredPct], [null, null, null], "effectif inconnu");
+    eq(participationOf(db.partners.map((p) => p.id)).headcount, null, "total incomplet");
+  });
+  test("Participation · les statistiques restent sur les sélectionnés qui ont répondu (bilans de la campagne = réponses de la campagne)", () => {
+    db.campaigns.filter((c) => c.test === "BSPA" && campaignState(c) !== "AVENIR").forEach((c) => {
+      eq(bspaModel([c.partnerId], false, c.id).total, db.participants.filter((x) => x.campaignId === c.id && x.completedAt).length, c.name);
+      eq(participationOf([c.partnerId], c.id).answered, bspaModel([c.partnerId], false, c.id).total, `${c.name} participation`);
+    });
+  });
+  test("Participation · en tête du tableau de bord pour le partenaire et Yodan (agrégé, jamais la liste) ; pas pour un rôle limité à ses agences", () => {
+    const p = ALPHA(), email = db.participants.find((x) => campaignOf(x.campaignId).partnerId === p.id).email;
+    [["partner", "t-pa"], ["yodan", "t-py"]].forEach(([actor, k]) => {
+      const box = document.createElement("div"); viewDashboard(box, { partnerIds: [p.id], actor }, k);
+      const txt = box.textContent;
+      assert(txt.indexOf("Participation") > -1 && txt.indexOf("Participation") < txt.indexOf("Bilans terminés"), `${actor} : participation pas en tête`);
+      assert(txt.includes("Effectif total") && txt.includes("Sélectionnés pour une campagne") && txt.includes("Ont répondu"), `${actor} : tuiles`);
+      assert(!txt.includes(email), `${actor} : e-mail de participant affiché`);
+    });
+    const box = document.createElement("div"); viewDashboard(box, { partnerIds: [MUT().id], actor: "partner", agencies: ["Antenne Bouaké"] }, "t-pad");
+    assert(!box.textContent.includes("Effectif total"), "affiché au superviseur secondaire");
+  });
+
+  test("Participation · affichée sur tous les tests (pas seulement BSPA), pour le partenaire et Yodan", () => {
+    db.partners.forEach((p) => p.tests.forEach((t) => {
+      ["partner", "yodan"].forEach((actor) => {
+        const box = document.createElement("div"), key = `t-all-${actor}-${p.id}-${t}`;
+        dash[key] = { test: t, campaign: "all", dim: 0 };
+        viewDashboard(box, { partnerIds: [p.id], actor }, key);
+        assert(box.textContent.includes("Participation") && box.textContent.includes("Effectif total"), `${p.name} / ${t} / ${actor}`);
+        const pa = participationOf([p.id], "all", t);
+        assert(pa.answered <= pa.selected, `${p.name} / ${t} : répondu > sélectionnés`);
+      });
+    }));
+  });
+  test("Démo · effectif daté visible : chaque partenaire a un effectif qui change entre ses campagnes ou depuis sa dernière campagne", () => {
+    db.partners.forEach((p) => {
+      assert(p.headcounts.length >= 2, `${p.name} : un seul effectif`);
+      const seen = new Set([headcountAt(p), ...p.tests.flatMap((t) => participationByCampaign([p.id], t).map((r) => r.headcount))]);
+      assert(seen.size >= 2, `${p.name} : aucune différence visible`);
+    });
+  });
+  test("Participation par campagne · effectif au début = effectif daté en vigueur ; même chiffres que le bloc d'une campagne", () => {
+    db.partners.forEach((p) => p.tests.forEach((t) => participationByCampaign([p.id], t).forEach((r) => {
+      eq(r.headcount, headcountAt(p, r.campaign.start), `${r.campaign.name} effectif`);
+      const one = participationOf([p.id], r.campaign.id, t); eq([r.selected, r.answered], [one.selected, one.answered], `${r.campaign.name} chiffres`);
+    })));
+  });
+
+  /* ---------- Tous les tests : seule différence = le questionnaire et ses indicateurs ---------- */
+  test("Tous les tests · filtres direction / région et campagne, groupes et participation sur chaque tableau de bord (KARASEK, COPSOQ…)", () => {
+    db.partners.forEach((p) => p.tests.forEach((t) => {
+      const box = document.createElement("div"), key = `t-common-${p.id}-${t}`;
+      dash[key] = { test: t, campaign: "all", dim: 0 };
+      viewDashboard(box, { partnerIds: [p.id], actor: "yodan" }, key);
+      assert($("#bs-u", box) && $("#bs-c", box), `${p.name} / ${t} : filtres absents`);
+      const camps = [...$("#bs-c", box).options].slice(1).map((o) => o.value);
+      eq(camps.sort(), db.campaigns.filter((c) => c.partnerId === p.id && c.test === t && campaignState(c) !== "AVENIR").map((c) => c.id).sort(), `${p.name} / ${t} : campagnes du test`);
+      const m = commonModel([p.id], t, false);
+      if (m.total) assert(box.textContent.includes("Par groupe") && box.textContent.includes(UNIT_LABEL[p.type].one), `${p.name} / ${t} : groupe ${UNIT_LABEL[p.type].one} absent`);
+      assert(box.textContent.includes("Participation"), `${p.name} / ${t} : participation`);
+    }));
+  });
+  test("Tous les tests · chaque bilan porte sa direction / région ; groupe = total ; filtre direction et filtre campagne cohérents", () => {
+    db.evaluations.forEach((e) => assert(partnerOf(e.partnerId).units.includes(e.profile.unite) || e.profile.unite, `${e.dossier} sans direction / région`));
+    db.partners.forEach((p) => p.tests.forEach((t) => {
+      const m = testModel([p.id], t, false);
+      eq(m.by[0].rows.reduce((s, r) => s + r.total, 0), m.total, `${p.name} / ${t} : groupe direction`);
+      m.by[0].rows.forEach((r) => eq(testModel([p.id], t, false, "all", null, r.group).total, r.total, `${p.name} / ${t} / ${r.group}`));
+      m.campaigns.forEach((c) => eq(testModel([p.id], t, false, c.id).total, db.evaluations.filter((e) => e.campaignId === c.id).length, `${c.name}`));
+    }));
+  });
+  test("Tous les tests · une campagne choisie pour un test n'est pas reprise sur un autre test", () => {
+    const box = document.createElement("div"), key = "t-switch", a = ALPHA();
+    const bspaCamp = db.campaigns.find((c) => c.partnerId === a.id && c.test === "BSPA");
+    dash[key] = { test: "BSPA", campaign: bspaCamp.id, dim: 0 };
+    viewDashboard(box, { partnerIds: [a.id], actor: "partner" }, key);
+    $('[data-dtest="KARASEK"]', box).click();
+    eq(dash[key].campaign, "all", "campagne BSPA gardée sur KARASEK");
+    eq(commonModel([a.id], "KARASEK", false, bspaCamp.id).campaignId, "all", "modèle");
+  });
+
+  test("Tableau de bord · un seul bloc « Par groupe » avec sélecteur (direction / région, genre, âge, ancienneté ; agence pour les autres tests) ; total identique pour chaque regroupement", () => {
+    [["BSPA", ["Direction", "Genre", "Tranche d'âge", "Ancienneté"]], ["KARASEK", ["Direction", "Genre", "Tranche d'âge", "Ancienneté", "Agence / site"]]].forEach(([t, labels]) => {
+      const box = document.createElement("div"), key = `t-grp-${t}`;
+      dash[key] = { test: t, campaign: "all", dim: 0 };
+      viewDashboard(box, { partnerIds: [ALPHA().id], actor: "yodan" }, key);
+      eq($$('[data-seg="grp"] [data-v]', box).map((b) => b.dataset.v), labels, `${t} : regroupements`);
+      eq($$(".fold", box).filter((b) => b.textContent.trim() === "Par groupe").length, 1, `${t} : un seul bloc`);
+      const total = t === "BSPA" ? bspaModel([ALPHA().id], false).total : testModel([ALPHA().id], t, false).total;
+      labels.forEach((l) => {
+        $(`[data-seg="grp"] [data-v="${l}"]`, box).click();
+        eq(dash[key].group, l, `${t} : sélection ${l}`);
+        const sum = $$(".bar-row .num-cell", box).reduce((s, c) => s + (+c.textContent || 0), 0);
+        eq(sum, total, `${t} / ${l} : total`);
+      });
+    });
+  });
+  test("Tableau de bord · bouton au début pour fermer puis rouvrir tous les blocs", () => {
+    const box = document.createElement("div"), key = "t-fold";
+    dash[key] = { test: "BSPA", campaign: "all", dim: 0 };
+    viewDashboard(box, { partnerIds: [ALPHA().id], actor: "partner" }, key);
+    const btn = $("#fold-all", box), first = $(".toolbar", box).firstElementChild;
+    assert(btn && first === btn, "bouton absent ou pas au début");
+    btn.click(); assert($$(".fold-body", box).every((b) => b.hidden), "blocs encore ouverts"); assert(btn.textContent.includes("déplier"), "libellé");
+    btn.click(); assert($$(".fold-body", box).every((b) => !b.hidden), "blocs encore fermés"); assert(btn.textContent.includes("replier"), "libellé");
   });
 
   onLogout = keepLogout;

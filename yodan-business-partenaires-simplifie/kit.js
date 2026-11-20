@@ -117,6 +117,21 @@ function qrSvg(seed = 7, size = 168) {
 /** Section repliable (graphes ATMP v2) : titre-bouton, état gardé. */
 const folds = {};
 const foldHtml = (id, title, body, open = true) => { const o = folds[id] ?? open; return `<section class="card fold-card"><h3 class="fold-h"><button type="button" class="fold" data-fold="${id}" aria-expanded="${o}">${esc(title)}</button></h3><div class="fold-body" ${o ? "" : "hidden"}>${body}</div></section>`; };
+/** Bouton « Tout replier / Tout déplier » : agit sur tous les blocs repliables de root. */
+const foldAllHtml = () => `<button type="button" class="btn btn-sm" id="fold-all" aria-label="Ouvrir ou fermer tous les blocs">▾ Tout replier</button>`;
+function bindFoldAll(root) {
+  const btn = $("#fold-all", root);
+  if (!btn) return;
+  const anyOpen = () => $$("[data-fold]", root).some((b) => b.getAttribute("aria-expanded") === "true");
+  const label = () => { const open = anyOpen(); btn.textContent = open ? "▾ Tout replier" : "▸ Tout déplier"; btn.setAttribute("aria-pressed", String(!open)); };
+  btn.addEventListener("click", () => {
+    const open = !anyOpen();
+    $$("[data-fold]", root).forEach((b) => { folds[b.dataset.fold] = open; b.setAttribute("aria-expanded", String(open)); b.closest(".fold-card").querySelector(".fold-body").hidden = !open; });
+    label();
+  });
+  $$("[data-fold]", root).forEach((b) => b.addEventListener("click", () => setTimeout(label)));
+  label();
+}
 function bindFolds(root) { $$("[data-fold]", root).forEach((b) => b.addEventListener("click", () => { const o = b.getAttribute("aria-expanded") !== "true"; folds[b.dataset.fold] = o; b.setAttribute("aria-expanded", String(o)); b.closest(".fold-card").querySelector(".fold-body").hidden = !o; })); }
 /** Sous-onglets internes à une fonctionnalité (ex. Validation : À décider / À appeler / Traités). */
 const subs = {};

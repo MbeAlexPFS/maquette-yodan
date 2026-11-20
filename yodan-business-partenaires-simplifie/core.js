@@ -160,6 +160,7 @@ const ACTION_CODES = {
   "Désactivation identifiant": "user.deactivate", "Réactivation identifiant": "user.activate", "Migration rôle": "user.role_migrate", "Renvoi invitation": "user.invite_resend",
   "Création partenaire": "system.tenant_create", "Inclusion de fonctionnalité": "system.tenant_roles", "Création agence": "agency.create",
   "Secteurs d'activité": "system.sectors", "Liste par défaut": "system.unit_defaults", "Liste du partenaire": "system.tenant_units",
+  "Secteur du partenaire": "system.tenant_sector", "Effectif du partenaire": "system.tenant_headcount",
   "Création campagne": "campaign.create", "Envoi campagne": "campaign.send", "Évaluation transmise": "evaluation.create", "Bilan de campagne": "evaluation.campaign_submit",
   "Décision": "evaluation.validate", "Consultation détail évaluations": "evaluation.list_view", "Recherche de dossier": "evaluation.lookup",
   "Ouverture rapport individuel": "final_report.view", "Consultation fiche personne": "patient.view", "Appel": "patient.call", "Retour d'appel": "patient.call_result",
@@ -202,6 +203,9 @@ function validatePartner(input) {
   else if (cfg.tests.some((t) => !TESTS[t])) e.tests = "Test inconnu.";
   if (!PARTNER_TYPES[input.type]) e.type = "Choisissez un type.";
   if (!input.sector) e.sector = "Choisissez un secteur d'activité.";
+  // Effectif total obligatoire (salariés ou adhérents) : il sert au taux de participation.
+  if (String(input.headcount ?? "").trim() === "") e.headcount = "Indiquez l'effectif total (salariés ou adhérents).";
+  else if (parseHeadcount(input.headcount) == null) e.headcount = HEADCOUNT_ERR;
   else if (!db.settings.sectors.includes(input.sector)) e.sector = "Secteur inconnu : il doit figurer dans la liste de l'admin LAMIFI.";
   if (cfg.campaign.on) {
     if (!cfg.campaign.roles.length) e.campaign = "Placez la campagne sur au moins un rôle actif.";
@@ -237,6 +241,8 @@ function createPartner(input, { silent = false } = {}) {
     // Métadonnées (filtres seulement) : secteur choisi dans la liste LAMIFI ; directions / régions copiées
     // depuis la liste par défaut Yodan du type (copie : modifier le modèle ne change pas ce partenaire).
     sector: input.sector, units: [...db.settings.defaultUnits[input.type]],
+    // Effectif total daté (salariés ou adhérents) : obligatoire à la création, puis tenu par l'admin Yodan.
+    headcounts: [{ value: parseHeadcount(input.headcount), from: todayIso(), at: clock.now }],
   };
   db.partners.push(p);
   const role = highestRole(p);
@@ -296,6 +302,55 @@ function setPartnerUnits(partnerId, text) {
   p.units = list;
   audit("Liste du partenaire", `${UNIT_LABEL[p.type].list} — ${p.name}`, { partnerId: p.id });
   return { ok: true, list };
+}
+/** Admin Yodan (profil partenaire) : secteur choisi dans la liste de l'admin LAMIFI. */
+function setPartnerSector(partnerId, sector) {
+  const p = partnerOf(partnerId);
+  if (!db.settings.sectors.includes(sector)) return { ok: false, err: "Choisissez un secteur de la liste de l'admin LAMIFI." };
+  p.sector = sector;
+  audit("Secteur du partenaire", `${sector} — ${p.name}`, { partnerId: p.id });
+  return { ok: true };
+}
+/** Libellé de l'effectif selon le type (salariés pour une entreprise, adhérents pour une mutuelle). */
+const HEADCOUNT_LABEL = { ENTREPRISE: "salariés", MUTUELLE: "adhérents" };
+const HEADCOUNT_MAX = 1000000;
+const HEADCOUNT_ERR = `Effectif : indiquez un nombre entier entre 1 et ${HEADCOUNT_MAX.toLocaleString("fr-FR")}.`;
+/** Saisie « 1 250 » → 1250 ; null si ce n'est pas un entier entre 1 et HEADCOUNT_MAX. */
+function parseHeadcount(value) {
+  const raw = String(value ?? "").replace(/[\s  ]/g, "");
+  return /^\d+$/.test(raw) && +raw >= 1 && +raw <= HEADCOUNT_MAX ? +raw : null;
+}
+/**
+ * Effectif DATÉ : chaque valeur vaut à partir de sa date. L'effectif à une date = la dernière valeur dont la
+ * date est antérieure ou égale (null s'il n'y en a pas : effectif non renseigné à cette date).
+ */
+function headcountAt(p, iso = todayIso()) {
+  const h = (p.headcounts || []).filter((x) => x.from <= iso).sort((a, b) => a.from.localeCompare(b.from)).at(-1);
+  return h ? h.value : null;
+}
+/**
+ * Admin Yodan (profil partenaire) : nouvel effectif valable à partir d'une date (pas dans le futur). Une saisie à la
+ * même date remplace la précédente. Sert uniquement au taux de participation ; les statistiques restent calculées sur
+ * les personnes sélectionnées pour une campagne.
+ */
+function setHeadcount(partnerId, value, from = todayIso()) {
+  const p = partnerOf(partnerId);
+  const n = parseHeadcount(value);
+  if (n == null) return { ok: false, err: HEADCOUNT_ERR };
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(from)) || Number.isNaN(Date.parse(`${from}T12:00:00`))) return { ok: false, err: "Indiquez la date à partir de laquelle cet effectif s'applique." };
+  if (from > todayIso()) return { ok: false, err: "La date ne peut pas être dans le futur." };
+  p.headcounts = [...(p.headcounts || []).filter((x) => x.from !== from), { value: n, from, at: clock.now }].sort((a, b) => a.from.localeCompare(b.from));
+  audit("Effectif du partenaire", `${n} à partir du ${fmtDate(from)} — ${p.name}`, { partnerId: p.id });
+  const selected = new Set(db.participants.filter((x) => { const c = campaignOf(x.campaignId); return c?.partnerId === p.id && c.start >= from; }).map((x) => x.email)).size;
+  return { ok: true, warn: selected > n ? `Attention : ${selected} personnes ont déjà été sélectionnées depuis cette date, plus que l'effectif indiqué.` : "" };
+}
+/** Admin Yodan : retirer une valeur saisie par erreur (tracé). */
+function removeHeadcount(partnerId, from) {
+  const p = partnerOf(partnerId);
+  if (!(p.headcounts || []).some((x) => x.from === from)) return { ok: false, err: "Valeur introuvable." };
+  p.headcounts = p.headcounts.filter((x) => x.from !== from);
+  audit("Effectif du partenaire", `valeur du ${fmtDate(from)} retirée — ${p.name}`, { partnerId: p.id });
+  return { ok: true };
 }
 
 /* =====================================================================

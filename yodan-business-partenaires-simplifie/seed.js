@@ -42,6 +42,9 @@ const SEED_UNITS = {
   ENTREPRISE: ["Direction générale", "Ressources humaines", "Finances", "Commerciale", "Opérations", "Systèmes d'information"],
   MUTUELLE: ["District d'Abidjan", "Région du Centre", "Région du Nord", "Région de l'Est", "Région de l'Ouest"],
 };
+/** Effectifs fictifs datés [valeur, il y a N jours] (profil partenaire, admin Yodan). */
+// Chaque partenaire a au moins un changement d'effectif entre ses campagnes ou depuis sa dernière campagne.
+const HEADCOUNT_OF = { "Entreprise Démo Alpha": [[110, 400], [120, 150], [125, 10]], "Entreprise Démo Beta": [[80, 240], [85, 50]], "Mutuelle Démo Horizon": [[380, 240], [400, 15]] };
 const SECTOR_OF = { "Entreprise Démo Alpha": "Banque et assurance", "Entreprise Démo Beta": "Industrie", "Mutuelle Démo Horizon": "Associatif et mutualiste" };
 
 function seed() {
@@ -55,9 +58,10 @@ function seed() {
   const mk = (name, type, agencies, account, tests, domain, include = (c) => c, emailPro = false) => {
     const cfg = include(presetFor(type)); cfg.tests = tests;
     if (emailPro) { cfg.campaign.emailPro = true; cfg.campaign.domains = [domain]; }
-    const r = createPartner({ name, type, sector: SECTOR_OF[name], cfg, agencies, firstAccount: account }, { silent: true });
+    const r = createPartner({ name, type, sector: SECTOR_OF[name], headcount: HEADCOUNT_OF[name][0][0], cfg, agencies, firstAccount: account }, { silent: true });
     Object.assign(r.identity, { password: DEMO_PASSWORD, activatedAt: CLOCK_START - 20 * DAY, token: null });
     r.partner.createdAt = addDays(todayIso(), -240);
+    r.partner.headcounts = (HEADCOUNT_OF[name] || []).map(([value, days]) => ({ value, from: addDays(todayIso(), -days), at: CLOCK_START - days * DAY }));
     return r.partner;
   };
   const alpha = mk("Entreprise Démo Alpha", "ENTREPRISE", ["Site Abidjan", "Site San-Pédro"], { name: "RH Alpha Démo", email: "rh@alpha.exemple.test" }, ["BSPA", "KARASEK"], "alpha.exemple.test", (c) => c, true);
@@ -104,7 +108,7 @@ function seed() {
     }
     return c;
   };
-  campaign(alpha, "Bilan 2025", "BSPA", addDays(todayIso(), -220), addDays(todayIso(), -190), 26, 21, 2, "alpha.exemple.test");
+  campaign(alpha, "Bilan du printemps 2026", "BSPA", addDays(todayIso(), -220), addDays(todayIso(), -190), 26, 21, 2, "alpha.exemple.test");
   campaign(alpha, "Bilan annuel 2026", "BSPA", addDays(todayIso(), -30), addDays(todayIso(), 10), 38, 29, 4, "alpha.exemple.test");
   campaign(alpha, "Contraintes au travail (printemps)", "KARASEK", addDays(todayIso(), -100), addDays(todayIso(), -70), 16, 12, 1, "alpha.exemple.test");
   campaign(alpha, "Contraintes au travail (automne)", "KARASEK", addDays(todayIso(), 5), addDays(todayIso(), 35), 8, 0, 0, "alpha.exemple.test");
