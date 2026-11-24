@@ -19,10 +19,21 @@ window.PROJETS = {
 
 window.MAQUETTES = [
   {
+    dossier: "entreprise-mutuelle-plateforme-v2",
+    projet: "entreprise-mutuelle",
+    titre: "Plateforme Entreprise & Mutuelle (v1.5 : entretien psychologue)",
+    description: "Entretien psychologue, rapport et avis, puis décision : aucune prise en charge sans avis validé.",
+    tests: true,
+    ecrans: ["Connexion", "Parcours participant (3 consentements)", "Clients", "Comptes", "Délais", "Campagnes", "Psychologues", "Mes entretiens", "Fiche d'entretien", "Participants", "Détail", "Validation / décisions", "À prendre en charge", "Historique"],
+    roles: ["Participant", "Admin Yodan", "Psychologue", "Assistante sociale", "Médecin-conseil (niveau 1)", "Superviseur secondaire (niveau 2)", "Superviseur principal", "Administrateur"],
+    maj: "2026-11-24",
+  },
+  {
     dossier: "entreprise-mutuelle-plateforme",
     projet: "entreprise-mutuelle",
     titre: "Plateforme Entreprise & Mutuelle (complète)",
     description: "Tous les écrans du cahier des charges v1.4 : clients, campagnes, test BSPA, validation, prise en charge.",
+    remplacePar: "entreprise-mutuelle-plateforme-v2",
     tests: true,
     ecrans: ["Connexion", "Parcours participant", "Clients", "Fiche client", "Comptes", "Délais", "Campagnes", "Tableau de bord", "Participants", "Détail", "Validation", "À prendre en charge", "Historique"],
     roles: ["Participant", "Admin Yodan", "Superviseur principal", "Administrateur", "Superviseur secondaire", "Validateur"],

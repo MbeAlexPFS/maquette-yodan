@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Maquette - Plateforme Entreprise &amp; Mutuelle v1.5</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Exo:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css?v=2.0.0">
+</head>
+<body>
+  <div class="mock-banner" role="note">Maquette — données fictives</div>
+  <header class="mock-bar">
+    <div class="mock-title">Plateforme Entreprise &amp; Mutuelle<span>maquette v1.5 : entretien psychologue → avis → décision (24/11/2026)</span></div>
+    <label class="mock-field"><span>Rôle / compte</span><select id="role-select"></select></label>
+    <div class="mock-field mock-time">
+      <span>Date simulée</span>
+      <div><strong id="now-label"></strong>
+        <button type="button" id="time-plus" title="Avancer d'un jour (fait courir les délais Mutuelle)">+1 jour</button>
+        <button type="button" id="time-reset" title="Revenir au 24/11/2026 et régénérer les données">Réinitialiser</button>
+      </div>
+    </div>
+    <div class="device-switch" role="group" aria-label="Affichage">
+      <button type="button" data-device="pc" class="on" aria-pressed="true">PC</button>
+      <button type="button" data-device="mobile" aria-pressed="false">Mobile</button>
+    </div>
+    <button type="button" class="notes-toggle" id="notes-toggle" aria-pressed="true">Notes UX</button>
+  </header>
+
+  <div class="layout with-notes" id="layout">
+    <main id="stage">
+      <div class="app" id="app" aria-live="polite"></div>
+    </main>
+    <aside class="notes" id="notes" aria-label="Notes UX">
+      <div id="tests-box"></div>
+      <div id="notes-body"></div>
+    </aside>
+  </div>
+
+  <div class="mailbox" id="mailbox" aria-live="polite"></div>
+  <div class="modal-root" id="modal-root"></div>
+
+  <!-- QR code : bibliothèque publique, aucune donnée envoyée (génération locale). -->
+  <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
+  <script src="textes.js?v=2.0.0"></script>
+  <script src="data.js?v=2.0.0"></script>
+  <script src="notes.js?v=2.0.0"></script>
+  <script src="app.js?v=2.0.0"></script>
+  <script src="tests.js?v=2.0.0"></script>
+  <script>window.APP.boot();</script>
+</body>
+</html>
