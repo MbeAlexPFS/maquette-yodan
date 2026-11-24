@@ -184,10 +184,10 @@ window.EM_NOTES = {
     titre: "Mes entretiens (psychologue)",
     choix: [
       "Uniquement les participants des campagnes attribuées, sous pseudonyme (P-XXXXX), sans nom ni coordonnées.",
+      "Décidé le 24/11/2026 : les psychologues travaillent en coordination interne avec Yodan, qui leur indique comment joindre chaque participant. Aucune coordonnée dans leur espace.",
       "Filtres : campagne et statut du rapport (à faire, rapport en cours, avis validé). Les dossiers à traiter sont en haut.",
     ],
     questions: [
-      "Comment le psychologue joint-il le participant sans voir ses coordonnées ? Options : (A) il voit le téléphone seul, sans nom ; (B) Yodan planifie l'appel et lui transmet un créneau ; (C) entretien en visio depuis la plateforme. À trancher.",
     ],
   },
   interview: {
@@ -198,9 +198,9 @@ window.EM_NOTES = {
       "Avis : date de l'entretien, risque confirmé / nuancé / infirmé, recommandation Oui / Non ; si Oui : type et urgence (grisés sinon) ; commentaire court (300 caractères) avec la consigne « aucun détail de vie privée ».",
       "« Enregistrer le brouillon » : invisible pour les autres rôles. « Valider l'avis » : contrôles (rapport PDF déposé, champs requis, date entre la fin du test et aujourd'hui), confirmation, puis avis verrouillé.",
       "La validation ouvre la décision et, pour une Mutuelle, démarre le délai de la région.",
+      "Décidé le 24/11/2026 : un avis validé ne se corrige jamais (il peut avoir lancé une décision en cours). La confirmation le rappelle ; le brouillon sert à relire avant de valider.",
     ],
     questions: [
-      "Correction d'un avis validé (erreur de saisie) : procédure ? Maquette : impossible. Option : demande de correction à l'Admin Yodan, tracée, avec nouvelle version visible des décideurs.",
       "Le PDF du rapport peut être remplacé après validation de l'avis (nouvelle version, tracée). OK, ou verrou aussi ?",
       "Modèle de rapport : faut-il imposer un modèle PDF Yodan (en-tête, pseudonyme, sans nom du participant) ?",
       "Entretien et avis pour les participants verts : obligatoires (protocole « entretien systématique »), sans décision derrière. OK ?",
